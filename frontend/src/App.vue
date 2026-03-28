@@ -19,6 +19,16 @@ const mobileMenuOpen = ref(false);
 const mobileSearchOpen = ref(false);
 const mobileSearchInputRef = ref<HTMLInputElement | null>(null);
 const playerExpanded = ref(false);
+const showScrollTop = ref(false);
+const SCROLL_TOP_THRESHOLD = 360;
+
+function updateScrollTopVisibility() {
+  showScrollTop.value = window.scrollY > SCROLL_TOP_THRESHOLD;
+}
+
+function scrollToTop() {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
 
 interface TrackSearchItem {
   id: string;
@@ -178,10 +188,13 @@ onMounted(() => {
     player.setAudioElement(audioElement.value);
   }
   document.addEventListener('click', closeDropdownsOnClickOutside);
+  window.addEventListener('scroll', updateScrollTopVisibility, { passive: true });
+  updateScrollTopVisibility();
 });
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', closeDropdownsOnClickOutside);
+  window.removeEventListener('scroll', updateScrollTopVisibility);
 });
 
 const isUploadDisabled = computed(() => route.name === 'upload');
@@ -644,6 +657,21 @@ watch(
       <RouterView />
     </main>
 
+    <Transition name="scroll-to-top">
+      <button
+        v-if="showScrollTop"
+        type="button"
+        class="scroll-to-top-btn"
+        :class="{ 'scroll-to-top-btn--above-player': !!player.currentTrack }"
+        aria-label="Наверх"
+        @click="scrollToTop"
+      >
+        <svg class="scroll-to-top-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 19V5M5 12l7-7 7 7" />
+        </svg>
+      </button>
+    </Transition>
+
     <!-- Мини-плеер (одна полоса как в Spotify) -->
     <div
       v-if="player.currentTrack"
@@ -674,8 +702,17 @@ watch(
         <div class="player-bar-center" @click.stop>
           <button class="player-bar-btn" type="button" @click="player.playPrev" aria-label="Предыдущий">‹‹</button>
           <button class="player-bar-btn player-bar-btn-play" type="button" @click="player.togglePlay" aria-label="Старт/пауза">
-            <span v-if="!player.isPlaying">▶</span>
-            <span v-else>❚❚</span>
+            <svg
+              v-if="!player.isPlaying"
+              class="track-action-play-svg"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path fill="currentColor" d="M8 5.14v13.72L19 12 8 5.14z" />
+            </svg>
+            <svg v-else class="track-action-play-svg" viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="currentColor" d="M6 5h4v14H6V5zm8 0h4v14h-4V5z" />
+            </svg>
           </button>
           <button class="player-bar-btn" type="button" @click="player.playNext" aria-label="Следующий">››</button>
         </div>
@@ -745,9 +782,18 @@ watch(
 
             <div class="player-full-controls">
               <button class="player-bar-btn" type="button" @click="player.playPrev">‹‹</button>
-              <button class="player-bar-btn player-bar-btn-play player-full-play" type="button" @click="player.togglePlay">
-                <span v-if="!player.isPlaying">▶</span>
-                <span v-else>❚❚</span>
+              <button class="player-bar-btn player-bar-btn-play player-full-play" type="button" @click="player.togglePlay" aria-label="Старт/пауза">
+                <svg
+                  v-if="!player.isPlaying"
+                  class="track-action-play-svg"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path fill="currentColor" d="M8 5.14v13.72L19 12 8 5.14z" />
+                </svg>
+                <svg v-else class="track-action-play-svg" viewBox="0 0 24 24" aria-hidden="true">
+                  <path fill="currentColor" d="M6 5h4v14H6V5zm8 0h4v14h-4V5z" />
+                </svg>
               </button>
               <button class="player-bar-btn" type="button" @click="player.playNext">››</button>
             </div>

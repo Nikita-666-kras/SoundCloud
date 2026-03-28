@@ -125,9 +125,23 @@ onMounted(() => load());
             </div>
           </div>
           <div class="track-actions">
-            <button class="primary-button" @click.stop="playTrack(track.id)">
-              <span v-if="player.currentTrackId === track.id && player.isPlaying">❚❚</span>
-              <span v-else>▶</span>
+            <button
+              type="button"
+              class="track-action-play"
+              :aria-label="player.currentTrackId === track.id && player.isPlaying ? 'Пауза' : 'Воспроизвести'"
+              @click.stop="playTrack(track.id)"
+            >
+              <svg
+                v-if="player.currentTrackId === track.id && player.isPlaying"
+                class="track-action-play-svg"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path fill="currentColor" d="M6 5h4v14H6V5zm8 0h4v14h-4V5z" />
+              </svg>
+              <svg v-else class="track-action-play-svg" viewBox="0 0 24 24" aria-hidden="true">
+                <path fill="currentColor" d="M8 5.14v13.72L19 12 8 5.14z" />
+              </svg>
             </button>
           </div>
         </div>
