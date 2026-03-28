@@ -1,0 +1,792 @@
+<script setup lang="ts">
+import { computed, onMounted, onBeforeUnmount, ref, watch, nextTick } from 'vue';
+import { useRouter, useRoute, RouterView } from 'vue-router';
+import { useAuthStore } from './stores/auth';
+import { usePlayerStore, type TrackListItem } from './stores/player';
+import { useNotificationStore } from './stores/notifications';
+import { useAlbumLikesStore } from './stores/albumLikes';
+import { api } from './api';
+
+const router = useRouter();
+const route = useRoute();
+const auth = useAuthStore();
+const player = usePlayerStore();
+const notifications = useNotificationStore();
+const albumLikes = useAlbumLikesStore();
+const showUserMenu = ref(false);
+const audioElement = ref<HTMLAudioElement | null>(null);
+const mobileMenuOpen = ref(false);
+const mobileSearchOpen = ref(false);
+const mobileSearchInputRef = ref<HTMLInputElement | null>(null);
+const playerExpanded = ref(false);
+
+interface TrackSearchItem {
+  id: string;
+  title: string;
+  genre: string | null;
+  album: string | null;
+  coverUrl: string | null;
+  ownerId: string;
+  ownerUsername: string;
+  playCount: number;
+  likes: number;
+  createdAt: string;
+}
+interface ArtistSearchItem {
+  id: string;
+  username: string;
+  bio: string | null;
+  avatarUrl: string | null;
+  playCount?: number;
+}
+interface AlbumSearchItem {
+  ownerId: string;
+  ownerUsername: string;
+  album: string;
+  coverUrl: string | null;
+  trackCount: number;
+  playCount?: number;
+}
+interface PlaylistSearchItem {
+  id: string;
+  name: string;
+  description: string | null;
+  createdAt: string;
+  trackCount: number;
+}
+
+const searchQuery = ref('');
+const searchOpen = ref(false);
+const searchLoading = ref(false);
+const searchResults = ref<{
+  tracks: TrackSearchItem[];
+  artists: ArtistSearchItem[];
+  albums: AlbumSearchItem[];
+  playlists: PlaylistSearchItem[];
+}>({ tracks: [], artists: [], albums: [], playlists: [] });
+let searchDebounce: ReturnType<typeof setTimeout> | null = null;
+
+async function runSearch() {
+  const q = searchQuery.value.trim();
+  if (!q) {
+    searchResults.value = { tracks: [], artists: [], albums: [], playlists: [] };
+    return;
+  }
+  searchLoading.value = true;
+  try {
+    const [tracksRes, artistsRes, albumsRes, playlistsRes] = await Promise.all([
+      api.get<TrackSearchItem[]>('/tracks/search', { params: { q, page: 0, size: 5 } }).catch(() => ({ data: [] })),
+      api.get<ArtistSearchItem[]>('/users/search', { params: { q } }).catch(() => ({ data: [] })),
+      api.get<AlbumSearchItem[]>('/tracks/search/albums', { params: { q } }).catch(() => ({ data: [] })),
+      auth.user ? api.get<PlaylistSearchItem[]>('/playlists', { params: { q } }).catch(() => ({ data: [] })) : Promise.resolve({ data: [] })
+    ]);
+    searchResults.value = {
+      tracks: Array.isArray(tracksRes.data) ? tracksRes.data : [],
+      artists: Array.isArray(artistsRes.data) ? artistsRes.data : [],
+      albums: Array.isArray(albumsRes.data) ? albumsRes.data : [],
+      playlists: Array.isArray(playlistsRes.data) ? playlistsRes.data : []
+    };
+  } catch (e) {
+    console.error(e);
+    searchResults.value = { tracks: [], artists: [], albums: [], playlists: [] };
+  } finally {
+    searchLoading.value = false;
+  }
+}
+
+function onSearchInput() {
+  if (searchQuery.value.trim()) {
+    searchOpen.value = true;
+  }
+  if (searchDebounce) clearTimeout(searchDebounce);
+  searchDebounce = setTimeout(() => {
+    searchDebounce = null;
+    runSearch();
+  }, 300);
+}
+
+function closeSearch() {
+  searchOpen.value = false;
+}
+
+function goToTrack(t: TrackSearchItem) {
+  player.setQueueAndPlay(searchResults.value.tracks as TrackListItem[], t.id);
+  closeSearch();
+  searchQuery.value = '';
+}
+
+function goToArtist(id: string) {
+  router.push(`/artist/${id}`);
+  closeSearch();
+  searchQuery.value = '';
+}
+
+function goToAlbum(a: AlbumSearchItem) {
+  router.push(`/artist/${a.ownerId}/album/${encodeURIComponent(a.album)}`);
+  closeSearch();
+  searchQuery.value = '';
+}
+
+function goToPlaylist(id: string) {
+  router.push(`/playlists/${id}`);
+  closeSearch();
+  searchQuery.value = '';
+}
+
+const hasSearchResults = computed(() => {
+  const r = searchResults.value;
+  return r.tracks.length > 0 || r.artists.length > 0 || r.albums.length > 0 || r.playlists.length > 0;
+});
+
+function closeDropdownsOnClickOutside(e: MouseEvent) {
+  const target = e.target as Node;
+  const searchWrapper = document.querySelector('.search-header-wrapper');
+  const mobileSearchBar = document.querySelector('.mobile-search-bar');
+  const notifWrapper = document.querySelector('.notif-wrapper');
+  const userMenu = document.querySelector('.user-menu');
+  const insideSearch =
+    (searchWrapper && searchWrapper.contains(target)) ||
+    (mobileSearchBar && mobileSearchBar.contains(target));
+  if (!insideSearch) {
+    searchOpen.value = false;
+  }
+  if (notifWrapper && !notifWrapper.contains(target)) {
+    notifications.close();
+  }
+  if (userMenu && !userMenu.contains(target)) {
+    showUserMenu.value = false;
+  }
+}
+
+function applyThemeFromStorage() {
+  const stored = (localStorage.getItem('theme') as 'light' | 'dark' | null) || 'light';
+  if (stored === 'dark') {
+    document.body.classList.add('dark-theme');
+  } else {
+    document.body.classList.remove('dark-theme');
+  }
+}
+
+onMounted(() => {
+  auth.hydrateFromStorage();
+  if (auth.user) {
+    albumLikes.loadLiked();
+  }
+  applyThemeFromStorage();
+  notifications.load();
+  if (audioElement.value) {
+    player.setAudioElement(audioElement.value);
+  }
+  document.addEventListener('click', closeDropdownsOnClickOutside);
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', closeDropdownsOnClickOutside);
+});
+
+const isUploadDisabled = computed(() => route.name === 'upload');
+
+function toggleUserMenu() {
+  if (!auth.user) return;
+  showUserMenu.value = !showUserMenu.value;
+}
+
+function goToSettings() {
+  showUserMenu.value = false;
+  router.push('/settings');
+}
+
+function goToProfile() {
+  showUserMenu.value = false;
+  router.push('/profile');
+}
+
+function goToFavorites() {
+  showUserMenu.value = false;
+  router.push('/favorite-artists');
+}
+
+function goToMyReleases() {
+  showUserMenu.value = false;
+  router.push('/my-releases');
+}
+
+function goToAdmin() {
+  showUserMenu.value = false;
+  router.push('/admin');
+}
+
+function logout() {
+  showUserMenu.value = false;
+  mobileMenuOpen.value = false;
+  auth.logout();
+}
+
+function openMobileSearch() {
+  mobileSearchOpen.value = true;
+  searchOpen.value = true;
+  nextTick(() => mobileSearchInputRef.value?.focus());
+}
+
+function closeMobileSearch() {
+  mobileSearchOpen.value = false;
+  searchOpen.value = false;
+}
+
+function closeMobileMenu() {
+  mobileMenuOpen.value = false;
+}
+
+function navTo(path: string) {
+  closeMobileMenu();
+  router.push(path);
+}
+
+watch(
+  () => route.path,
+  () => {
+    closeMobileMenu();
+  }
+);
+</script>
+
+<template>
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="header-left">
+        <div class="logo" @click="router.push('/')">
+          <div class="logo-mark">
+            <div class="logo-wave" />
+          </div>
+          <span>slapshous</span>
+        </div>
+        <button
+          type="button"
+          class="mobile-search-btn header-mobile-only"
+          aria-label="Поиск"
+          @click="openMobileSearch"
+        >
+          <svg class="search-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        </button>
+        <div class="search-header-wrapper header-desktop-only">
+          <div class="search-header-input-wrap">
+            <svg class="search-header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input
+              v-model="searchQuery"
+              type="search"
+              class="search-header-input"
+              placeholder="Поиск: треки, исполнители, альбомы, плейлисты"
+              autocomplete="off"
+              @focus="searchOpen = true"
+              @input="onSearchInput"
+            />
+          </div>
+          <div
+            v-if="searchOpen && (searchQuery.trim() || hasSearchResults)"
+            class="search-header-dropdown"
+            @click.stop
+          >
+            <div v-if="searchLoading" class="search-header-loading muted">Поиск...</div>
+            <template v-else>
+              <div v-if="searchQuery.trim() && !hasSearchResults" class="muted" style="padding: 12px">
+                Ничего не найдено.
+              </div>
+              <template v-else>
+                <section v-if="searchResults.tracks.length" class="search-header-section">
+                  <div class="search-header-section-title">Треки</div>
+                  <div
+                    v-for="t in searchResults.tracks"
+                    :key="t.id"
+                    class="search-header-item"
+                    @click="goToTrack(t)"
+                  >
+                    <div class="search-header-item-cover">
+                      <img
+                        v-if="t.coverUrl"
+                        :src="`http://localhost:8080${t.coverUrl}`"
+                        alt=""
+                      />
+                      <span v-else class="search-header-item-cover-placeholder">♪</span>
+                    </div>
+                    <div class="search-header-item-text">
+                      <span class="search-header-item-primary">{{ t.title }}</span>
+                      <span class="muted">{{ t.ownerUsername }}</span>
+                    </div>
+                  </div>
+                </section>
+                <section v-if="searchResults.artists.length" class="search-header-section">
+                  <div class="search-header-section-title">Исполнители</div>
+                  <div
+                    v-for="a in searchResults.artists"
+                    :key="a.id"
+                    class="search-header-item"
+                    @click="goToArtist(a.id)"
+                  >
+                    <div class="search-header-item-cover search-header-item-avatar">
+                      <img
+                        :src="`http://localhost:8080/api/users/${a.id}/avatar`"
+                        alt=""
+                        @error="$event.target.style.display = 'none'"
+                      />
+                      <span v-if="!a.avatarUrl" class="search-header-item-cover-placeholder">{{ (a.username || '?').charAt(0) }}</span>
+                    </div>
+                    <div class="search-header-item-text">
+                      <span class="search-header-item-primary">{{ a.username }}</span>
+                      <span v-if="a.playCount != null && a.playCount > 0" class="muted">{{ a.playCount }} прослушиваний</span>
+                    </div>
+                  </div>
+                </section>
+                <section v-if="searchResults.albums.length" class="search-header-section">
+                  <div class="search-header-section-title">Альбомы</div>
+                  <div
+                    v-for="(a, i) in searchResults.albums"
+                    :key="`${a.ownerId}-${a.album}-${i}`"
+                    class="search-header-item"
+                    @click="goToAlbum(a)"
+                  >
+                    <div class="search-header-item-cover">
+                      <img
+                        v-if="a.coverUrl"
+                        :src="`http://localhost:8080${a.coverUrl}`"
+                        alt=""
+                      />
+                      <span v-else class="search-header-item-cover-placeholder">⌘</span>
+                    </div>
+                    <div class="search-header-item-text">
+                      <span class="search-header-item-primary">{{ a.album }}</span>
+                      <span class="muted">{{ a.ownerUsername }} · {{ a.trackCount }} трек(ов)<span v-if="a.playCount != null && a.playCount > 0"> · {{ a.playCount }} прослушиваний</span></span>
+                    </div>
+                  </div>
+                </section>
+                <section v-if="searchResults.playlists.length" class="search-header-section">
+                  <div class="search-header-section-title">Плейлисты</div>
+                  <div
+                    v-for="p in searchResults.playlists"
+                    :key="p.id"
+                    class="search-header-item"
+                    @click="goToPlaylist(p.id)"
+                  >
+                    <div class="search-header-item-cover search-header-item-cover-placeholder">
+                      {{ p.name.charAt(0) }}
+                    </div>
+                    <div class="search-header-item-text">
+                      <span class="search-header-item-primary">{{ p.name }}</span>
+                      <span class="muted">{{ p.trackCount }} трек(ов)</span>
+                    </div>
+                  </div>
+                </section>
+              </template>
+            </template>
+          </div>
+        </div>
+      </div>
+
+      <div class="header-center header-desktop-only">
+        <nav class="main-nav">
+          <button
+            type="button"
+            class="main-nav-item"
+            :class="{ active: route.name === 'home' }"
+            @click="router.push('/')"
+          >
+            Главная
+          </button>
+          <button
+            type="button"
+            class="main-nav-item"
+            :class="{ active: route.name === 'favorites' || route.name === 'favorites-tracks' }"
+            @click="router.push('/favorites')"
+          >
+            Избранное
+          </button>
+          <button
+            type="button"
+            class="main-nav-item"
+            :class="{ active: route.name === 'favorite-artists' }"
+            @click="router.push('/favorite-artists')"
+          >
+            Любимые артисты
+          </button>
+          <button
+            type="button"
+            class="main-nav-item"
+            :class="{ active: route.name === 'friends' }"
+            @click="router.push('/friends')"
+          >
+            Друзья
+          </button>
+        </nav>
+      </div>
+
+      <div class="header-right">
+        <button
+          type="button"
+          class="burger-btn header-mobile-only"
+          aria-label="Меню"
+          @click="mobileMenuOpen = true"
+        >
+          <span class="burger-line" />
+          <span class="burger-line" />
+          <span class="burger-line" />
+        </button>
+        <div class="auth-header-actions header-desktop-only">
+        <div v-if="auth.user" class="notif-wrapper">
+          <button
+            type="button"
+            class="notif-button"
+            @click="notifications.toggleOpen"
+          >
+            <svg class="notif-bell-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            <span v-if="notifications.unreadCount" class="notif-badge">
+              {{ notifications.unreadCount }}
+            </span>
+          </button>
+          <div
+            v-if="notifications.open"
+            class="notif-dropdown"
+            @click.stop
+          >
+            <div v-if="!notifications.items.length" class="muted">
+              Новых уведомлений нет.
+            </div>
+            <div
+              v-else
+              v-for="n in notifications.items.slice(0, 10)"
+              :key="n.id"
+              class="notif-item"
+              :class="{ unread: !n.read }"
+              @click="notifications.markRead(n.id)"
+            >
+              <div class="notif-text">{{ n.message }}</div>
+              <div class="notif-time">
+                {{ new Date(n.createdAt).toLocaleString() }}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="auth.user" class="user-menu header-desktop-only" @click="toggleUserMenu">
+          <div class="avatar-wrapper">
+            <img
+              :src="`http://localhost:8080/api/users/${auth.user.id}/avatar`"
+              alt="avatar"
+              class="avatar-image"
+              @error="$event.target.style.display = 'none'"
+            />
+          </div>
+          <span class="user-name">{{ auth.user.username }}</span>
+          <div v-if="showUserMenu" class="user-dropdown">
+            <button type="button" class="user-dropdown-item" @click.stop="goToSettings">
+              Настройки
+            </button>
+            <button type="button" class="user-dropdown-item" @click.stop="goToProfile">
+              Профиль
+            </button>
+            <button type="button" class="user-dropdown-item" @click.stop="goToMyReleases">
+              Мои релизы
+            </button>
+            <button type="button" class="user-dropdown-item" @click.stop="goToFavorites">
+              Избранные
+            </button>
+            <button
+              v-if="auth.user.admin"
+              type="button"
+              class="user-dropdown-item"
+              @click.stop="goToAdmin"
+            >
+              Админка
+            </button>
+            <button type="button" class="user-dropdown-item" @click.stop="logout">
+              Выйти
+            </button>
+          </div>
+        </div>
+        <button v-if="!auth.user" class="secondary-button" @click="router.push('/login')">
+          Вход
+        </button>
+        <button v-if="!auth.user" class="secondary-button" @click="router.push('/register')">
+          Регистрация
+        </button>
+        <button class="primary-button upload-button header-desktop-only" :disabled="isUploadDisabled" @click="router.push('/upload')">
+          Выложить трек
+        </button>
+      </div>
+      </div>
+    </header>
+
+    <!-- Мобильная панель поиска (открывается по иконке лупы) -->
+    <div class="mobile-search-bar" :class="{ 'mobile-search-bar-open': mobileSearchOpen }">
+      <div class="mobile-search-bar-inner">
+        <div class="search-header-input-wrap mobile-search-input-wrap">
+          <svg class="search-header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <input
+            ref="mobileSearchInputRef"
+            v-model="searchQuery"
+            type="search"
+            class="search-header-input"
+            placeholder="Поиск: треки, исполнители, альбомы"
+            autocomplete="off"
+            @input="onSearchInput"
+            @focus="searchOpen = true"
+          />
+        </div>
+        <button type="button" class="mobile-search-close" aria-label="Закрыть" @click="closeMobileSearch">×</button>
+      </div>
+      <div
+        v-if="searchOpen && (searchQuery.trim() || hasSearchResults)"
+        class="search-header-dropdown mobile-search-dropdown"
+        @click.stop
+      >
+        <div v-if="searchLoading" class="search-header-loading muted">Поиск...</div>
+        <template v-else>
+          <div v-if="searchQuery.trim() && !hasSearchResults" class="muted" style="padding: 12px">Ничего не найдено.</div>
+          <template v-else>
+            <section v-if="searchResults.tracks.length" class="search-header-section">
+              <div class="search-header-section-title">Треки</div>
+              <div v-for="t in searchResults.tracks" :key="t.id" class="search-header-item" @click="goToTrack(t); closeMobileSearch()">
+                <div class="search-header-item-cover">
+                  <img v-if="t.coverUrl" :src="`http://localhost:8080${t.coverUrl}`" alt="" />
+                  <span v-else class="search-header-item-cover-placeholder">♪</span>
+                </div>
+                <div class="search-header-item-text">
+                  <span class="search-header-item-primary">{{ t.title }}</span>
+                  <span class="muted">{{ t.ownerUsername }}</span>
+                </div>
+              </div>
+            </section>
+            <section v-if="searchResults.artists.length" class="search-header-section">
+              <div class="search-header-section-title">Исполнители</div>
+              <div v-for="a in searchResults.artists" :key="a.id" class="search-header-item" @click="goToArtist(a.id); closeMobileSearch()">
+                <div class="search-header-item-cover search-header-item-avatar">
+                  <img :src="`http://localhost:8080/api/users/${a.id}/avatar`" alt="" @error="$event.target.style.display = 'none'" />
+                  <span v-if="!a.avatarUrl" class="search-header-item-cover-placeholder">{{ (a.username || '?').charAt(0) }}</span>
+                </div>
+                <div class="search-header-item-text">
+                  <span class="search-header-item-primary">{{ a.username }}</span>
+                </div>
+              </div>
+            </section>
+            <section v-if="searchResults.albums.length" class="search-header-section">
+              <div class="search-header-section-title">Альбомы</div>
+              <div v-for="(a, i) in searchResults.albums" :key="`${a.ownerId}-${a.album}-${i}`" class="search-header-item" @click="goToAlbum(a); closeMobileSearch()">
+                <div class="search-header-item-cover">
+                  <img v-if="a.coverUrl" :src="`http://localhost:8080${a.coverUrl}`" alt="" />
+                  <span v-else class="search-header-item-cover-placeholder">⌘</span>
+                </div>
+                <div class="search-header-item-text">
+                  <span class="search-header-item-primary">{{ a.album }}</span>
+                  <span class="muted">{{ a.ownerUsername }}</span>
+                </div>
+              </div>
+            </section>
+            <section v-if="searchResults.playlists.length" class="search-header-section">
+              <div class="search-header-section-title">Плейлисты</div>
+              <div v-for="p in searchResults.playlists" :key="p.id" class="search-header-item" @click="goToPlaylist(p.id); closeMobileSearch()">
+                <div class="search-header-item-cover search-header-item-cover-placeholder">{{ p.name.charAt(0) }}</div>
+                <div class="search-header-item-text">
+                  <span class="search-header-item-primary">{{ p.name }}</span>
+                </div>
+              </div>
+            </section>
+          </template>
+        </template>
+      </div>
+    </div>
+
+    <!-- Бургер-меню (мобильное) -->
+    <Teleport to="body">
+      <Transition name="burger">
+        <div v-if="mobileMenuOpen" class="burger-overlay" @click="closeMobileMenu">
+          <div class="burger-drawer" @click.stop>
+            <div class="burger-drawer-header">
+              <span class="burger-drawer-title">Меню</span>
+              <button type="button" class="burger-close" aria-label="Закрыть" @click="closeMobileMenu">×</button>
+            </div>
+            <nav class="burger-nav">
+              <button type="button" class="burger-nav-item" :class="{ active: route.name === 'home' }" @click="navTo('/')">
+                Главная
+              </button>
+              <button type="button" class="burger-nav-item" :class="{ active: route.name === 'favorites' || route.name === 'favorites-tracks' }" @click="navTo('/favorites')">
+                Избранное
+              </button>
+              <button type="button" class="burger-nav-item" :class="{ active: route.name === 'favorite-artists' }" @click="navTo('/favorite-artists')">
+                Любимые артисты
+              </button>
+              <button type="button" class="burger-nav-item" :class="{ active: route.name === 'friends' }" @click="navTo('/friends')">
+                Друзья
+              </button>
+            </nav>
+            <div v-if="auth.user" class="burger-user">
+              <button type="button" class="burger-profile-btn" @click="navTo('/profile')">
+                <div class="avatar-wrapper burger-avatar">
+                  <img :src="`http://localhost:8080/api/users/${auth.user.id}/avatar`" alt="" class="avatar-image" @error="$event.target.style.display = 'none'" />
+                </div>
+                <span>{{ auth.user.username }}</span>
+              </button>
+              <button type="button" class="burger-nav-item" @click="navTo('/settings')">Настройки</button>
+              <button type="button" class="burger-nav-item" @click="navTo('/my-releases')">Мои релизы</button>
+              <button v-if="auth.user.admin" type="button" class="burger-nav-item" @click="navTo('/admin')">Админка</button>
+              <button type="button" class="burger-nav-item" @click="logout">Выйти</button>
+            </div>
+            <div v-else class="burger-auth">
+              <button type="button" class="primary-button burger-upload-btn" @click="navTo('/login')">Вход</button>
+              <button type="button" class="secondary-button" @click="navTo('/register')">Регистрация</button>
+            </div>
+            <button class="primary-button burger-upload-btn full-width" :disabled="isUploadDisabled" @click="navTo('/upload')">
+              Выложить трек
+            </button>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <main class="main-content">
+      <RouterView />
+    </main>
+
+    <!-- Мини-плеер (одна полоса как в Spotify) -->
+    <div
+      v-if="player.currentTrack"
+      class="player-bar"
+      @click="playerExpanded = true"
+    >
+      <div class="player-bar-progress-top" @click.stop>
+        <div class="player-progress-bar player-bar-progress-bar" @click="player.seek">
+          <div
+            class="player-progress-fill"
+            :style="{ width: player.progressPercent + '%', opacity: 0.4 + player.volume * 0.6 }"
+          ></div>
+        </div>
+      </div>
+
+      <div class="player-bar-row">
+        <div class="player-bar-left">
+          <div v-if="player.currentTrack.coverUrl" class="player-bar-cover">
+            <img :src="`http://localhost:8080${player.currentTrack.coverUrl}`" alt="cover" />
+          </div>
+          <div v-else class="player-bar-cover player-bar-cover-placeholder">♪</div>
+          <div class="player-bar-info">
+            <div class="player-bar-title">{{ player.currentTrack.title }}</div>
+            <div class="player-bar-meta">{{ player.currentTrack.ownerUsername }}</div>
+          </div>
+        </div>
+
+        <div class="player-bar-center" @click.stop>
+          <button class="player-bar-btn" type="button" @click="player.playPrev" aria-label="Предыдущий">‹‹</button>
+          <button class="player-bar-btn player-bar-btn-play" type="button" @click="player.togglePlay" aria-label="Старт/пауза">
+            <span v-if="!player.isPlaying">▶</span>
+            <span v-else>❚❚</span>
+          </button>
+          <button class="player-bar-btn" type="button" @click="player.playNext" aria-label="Следующий">››</button>
+        </div>
+
+        <div class="player-bar-right" @click.stop>
+          <div class="player-volume-wrap">
+            <div class="player-volume">
+              <input
+                class="player-volume-slider"
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                :value="player.volume"
+                @input="player.changeVolume"
+              />
+            </div>
+            <div class="player-time player-bar-time">
+              <span>{{ player.formatTime(player.currentTime) }}</span>
+              <span>{{ player.formatTime(player.duration) }}</span>
+            </div>
+          </div>
+          <button class="player-bar-expand" type="button" aria-label="Развернуть плеер" @click="playerExpanded = true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Развёрнутый плеер (как в Spotify) -->
+    <Teleport to="body">
+      <Transition name="player-expand">
+        <div
+          v-if="playerExpanded && player.currentTrack"
+          class="player-full-overlay"
+          @click.self="playerExpanded = false"
+        >
+          <div class="player-full">
+            <button class="player-full-close" type="button" aria-label="Свернуть" @click="playerExpanded = false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+
+            <div class="player-full-cover-wrap">
+              <div v-if="player.currentTrack.coverUrl" class="player-full-cover">
+                <img :src="`http://localhost:8080${player.currentTrack.coverUrl}`" alt="cover" />
+              </div>
+              <div v-else class="player-full-cover player-full-cover-placeholder">♪</div>
+            </div>
+
+            <div class="player-full-info">
+              <div class="player-full-title">{{ player.currentTrack.title }}</div>
+              <div class="player-full-meta">{{ player.currentTrack.ownerUsername }}</div>
+            </div>
+
+            <div class="player-full-progress" @click="player.seek">
+              <div class="player-progress-bar player-full-progress-bar">
+                <div
+                  class="player-progress-fill"
+                  :style="{ width: player.progressPercent + '%', opacity: 0.4 + player.volume * 0.6 }"
+                ></div>
+              </div>
+              <div class="player-time player-full-time">
+                <span>{{ player.formatTime(player.currentTime) }}</span>
+                <span>{{ player.formatTime(player.duration) }}</span>
+              </div>
+            </div>
+
+            <div class="player-full-controls">
+              <button class="player-bar-btn" type="button" @click="player.playPrev">‹‹</button>
+              <button class="player-bar-btn player-bar-btn-play player-full-play" type="button" @click="player.togglePlay">
+                <span v-if="!player.isPlaying">▶</span>
+                <span v-else>❚❚</span>
+              </button>
+              <button class="player-bar-btn" type="button" @click="player.playNext">››</button>
+            </div>
+
+            <div class="player-full-extra">
+              <button
+                class="player-mode-button"
+                type="button"
+                @click="player.cyclePlaybackMode"
+                :title="player.playbackMode === 'queue' ? 'Поток' : player.playbackMode === 'shuffle' ? 'Шафл' : 'Повтор'"
+              >
+                <svg v-if="player.playbackMode === 'queue'" class="player-mode-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M4 6h2v2H4V6zm0 5h2v2H4v-2zm0 5h2v2H4v-2zm3-10h10v2H7V6zm0 5h10v2H7v-2zm0 5h10v2H7v-2z"/></svg>
+                <svg v-else-if="player.playbackMode === 'shuffle'" class="player-mode-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>
+                <svg v-else class="player-mode-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 1l4 4-4 4M3 11V9a4 4 0 014-4h14M7 23l-4-4 4-4M21 13v2a4 4 0 01-4 4H3"/></svg>
+              </button>
+              <div class="player-volume player-full-volume">
+                <input
+                  class="player-volume-slider"
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  :value="player.volume"
+                  @input="player.changeVolume"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- Аудио-элемент всегда в DOM, чтобы стор мог им управлять -->
+    <audio
+      ref="audioElement"
+      style="display: none"
+      @loadedmetadata="player.onLoadedMetadata"
+      @timeupdate="player.onTimeUpdate"
+      @ended="player.onEnded"
+    />
+  </div>
+</template>
