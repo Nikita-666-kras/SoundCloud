@@ -122,12 +122,13 @@ public class UserController {
 
     @GetMapping("/{id}/favorites")
     public ResponseEntity<java.util.List<TrackDtos.TrackListItem>> favorites(@PathVariable UUID id) {
+        User viewer = SecurityUtils.getCurrentUser(userService).orElse(null);
         return userService.findById(id)
                 .map(user -> {
                     java.util.List<TrackLike> likes = likeRepository.findByUserOrderByCreatedAtDesc(user);
                     java.util.List<TrackDtos.TrackListItem> list = likes.stream()
                             .map(TrackLike::getTrack)
-                            .map(t -> trackService.toListItem(t, trackService.countLikes(t)))
+                            .map(t -> trackService.toListItem(t, trackService.countLikes(t), viewer))
                             .toList();
                     return ResponseEntity.ok(list);
                 })
@@ -136,10 +137,11 @@ public class UserController {
 
     @GetMapping("/{id}/tracks")
     public ResponseEntity<java.util.List<TrackDtos.TrackListItem>> userTracks(@PathVariable UUID id) {
+        User viewer = SecurityUtils.getCurrentUser(userService).orElse(null);
         return userService.findById(id)
                 .map(user -> {
                     java.util.List<TrackDtos.TrackListItem> list = trackService.listByOwner(user).stream()
-                            .map(t -> trackService.toListItem(t, trackService.countLikes(t)))
+                            .map(t -> trackService.toListItem(t, trackService.countLikes(t), viewer))
                             .toList();
                     return ResponseEntity.ok(list);
                 })
@@ -149,12 +151,13 @@ public class UserController {
     @GetMapping("/{id}/albums/{album}")
     public ResponseEntity<java.util.List<TrackDtos.TrackListItem>> userAlbumTracks(@PathVariable UUID id,
                                                                                    @PathVariable String album) {
+        User viewer = SecurityUtils.getCurrentUser(userService).orElse(null);
         return userService.findById(id)
                 .map(user -> {
                     java.util.List<TrackDtos.TrackListItem> list = trackService
                             .listByOwnerAndAlbum(user, album)
                             .stream()
-                            .map(t -> trackService.toListItem(t, trackService.countLikes(t)))
+                            .map(t -> trackService.toListItem(t, trackService.countLikes(t), viewer))
                             .toList();
                     return ResponseEntity.ok(list);
                 })

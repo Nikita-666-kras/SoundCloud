@@ -36,6 +36,7 @@ public class SecurityConfig {
                         .authenticationEntryPoint((req, res, ex) -> res.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized")))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/login", "/api/auth/register", "/api/auth/refresh", "/api/auth/logout").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/nonstop/playlist").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/tracks", "/api/tracks/*/stream", "/api/tracks/*/cover", "/api/tracks/*/comments").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/users/*", "/api/users/*/avatar", "/api/users/*/tracks", "/api/users/*/albums/*", "/api/users/*/favorite-artists").permitAll()
                         .requestMatchers("/api/**").authenticated()

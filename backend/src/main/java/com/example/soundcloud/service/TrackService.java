@@ -11,6 +11,7 @@ import com.example.soundcloud.repository.TrackReportRepository;
 import com.example.soundcloud.repository.TrackRepository;
 import com.example.soundcloud.repository.AlbumLikeRepository;
 import com.example.soundcloud.repository.PlaylistTrackRepository;
+import com.example.soundcloud.repository.PromotionCampaignRepository;
 import com.example.soundcloud.repository.UserFollowRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -36,6 +37,7 @@ public class TrackService {
     private final TrackReportRepository trackReportRepository;
     private final PlaylistTrackRepository playlistTrackRepository;
     private final AlbumLikeRepository albumLikeRepository;
+    private final PromotionCampaignRepository promotionCampaignRepository;
 
     public TrackService(TrackRepository trackRepository,
                         TrackLikeRepository likeRepository,
@@ -44,7 +46,8 @@ public class TrackService {
                         TrackCommentRepository trackCommentRepository,
                         TrackReportRepository trackReportRepository,
                         PlaylistTrackRepository playlistTrackRepository,
-                        AlbumLikeRepository albumLikeRepository) {
+                        AlbumLikeRepository albumLikeRepository,
+                        PromotionCampaignRepository promotionCampaignRepository) {
         this.trackRepository = trackRepository;
         this.likeRepository = likeRepository;
         this.userFollowRepository = userFollowRepository;
@@ -53,6 +56,7 @@ public class TrackService {
         this.trackReportRepository = trackReportRepository;
         this.playlistTrackRepository = playlistTrackRepository;
         this.albumLikeRepository = albumLikeRepository;
+        this.promotionCampaignRepository = promotionCampaignRepository;
     }
 
     @Transactional
@@ -212,6 +216,7 @@ public class TrackService {
         if (track.getCoverUrl() != null) {
             fileStorageService.deleteImage(track.getCoverUrl());
         }
+        promotionCampaignRepository.deleteByTrack(track);
         trackRepository.delete(track);
     }
 
@@ -260,7 +265,15 @@ public class TrackService {
         return null;
     }
 
-    public TrackDtos.TrackListItem toListItem(Track track, long likesCount) {
+    public boolean userHasLiked(User user, Track track) {
+        if (user == null || track == null) {
+            return false;
+        }
+        return likeRepository.findByUserAndTrack(user, track).isPresent();
+    }
+
+    public TrackDtos.TrackListItem toListItem(Track track, long likesCount, User viewerOrNull) {
+        boolean likedByMe = userHasLiked(viewerOrNull, track);
         return new TrackDtos.TrackListItem(
                 track.getId(),
                 track.getTitle(),
@@ -271,6 +284,7 @@ public class TrackService {
                 track.getOwner().getUsername(),
                 track.getPlayCount(),
                 likesCount,
+                likedByMe,
                 track.getCreatedAt()
         );
     }

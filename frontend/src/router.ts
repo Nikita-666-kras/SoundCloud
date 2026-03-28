@@ -6,6 +6,7 @@ import Upload from './views/Upload.vue';
 import Profile from './views/Profile.vue';
 import ProfileEdit from './views/ProfileEdit.vue';
 import Settings from './views/Settings.vue';
+import Support from './views/Support.vue';
 import Favorites from './views/Favorites.vue';
 import FavoritesTracks from './views/FavoritesTracks.vue';
 import Artist from './views/Artist.vue';
@@ -32,6 +33,7 @@ const router = createRouter({
     { path: '/my-releases', name: 'my-releases', component: MyReleases },
     { path: '/admin', name: 'admin', component: Admin },
     { path: '/settings', name: 'settings', component: Settings },
+    { path: '/support', name: 'support', component: Support },
     { path: '/favorites', name: 'favorites', component: Favorites },
     { path: '/favorites/tracks', name: 'favorites-tracks', component: FavoritesTracks },
     { path: '/favorite-artists', name: 'favorite-artists', component: FavoriteArtists },

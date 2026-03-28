@@ -19,7 +19,29 @@ const mobileMenuOpen = ref(false);
 const mobileSearchOpen = ref(false);
 const mobileSearchInputRef = ref<HTMLInputElement | null>(null);
 const playerExpanded = ref(false);
+const playerLikeBusy = ref(false);
 const showScrollTop = ref(false);
+
+const playerTrackLiked = computed(() => !!player.currentTrack?.likedByMe);
+
+async function togglePlayerLike(event?: Event) {
+  event?.stopPropagation();
+  if (!auth.user || !player.currentTrackId || playerLikeBusy.value) return;
+  playerLikeBusy.value = true;
+  try {
+    const res = await api.post<{ likes: number; likedByMe: boolean }>(
+      `/tracks/${player.currentTrackId}/like`
+    );
+    player.patchTrackInQueue(player.currentTrackId, {
+      likes: res.data.likes,
+      likedByMe: res.data.likedByMe
+    });
+  } catch (e) {
+    console.error(e);
+  } finally {
+    playerLikeBusy.value = false;
+  }
+}
 const SCROLL_TOP_THRESHOLD = 360;
 
 function updateScrollTopVisibility() {
@@ -693,9 +715,35 @@ watch(
             <img :src="`http://localhost:8080${player.currentTrack.coverUrl}`" alt="cover" />
           </div>
           <div v-else class="player-bar-cover player-bar-cover-placeholder">♪</div>
-          <div class="player-bar-info">
-            <div class="player-bar-title">{{ player.currentTrack.title }}</div>
-            <div class="player-bar-meta">{{ player.currentTrack.ownerUsername }}</div>
+          <div class="player-bar-info-block">
+            <div class="player-bar-info">
+              <div class="player-bar-title">{{ player.currentTrack.title }}</div>
+              <div class="player-bar-meta">{{ player.currentTrack.ownerUsername }}</div>
+            </div>
+            <button
+              v-if="auth.user"
+              type="button"
+              class="track-action-icon-btn player-bar-like"
+              :class="{ liked: playerTrackLiked }"
+              :disabled="playerLikeBusy"
+              aria-label="Лайк"
+              @click.stop="togglePlayerLike"
+            >
+              <svg
+                class="track-action-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path
+                  d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"
+                />
+              </svg>
+            </button>
           </div>
         </div>
 
@@ -714,7 +762,14 @@ watch(
               <path fill="currentColor" d="M6 5h4v14H6V5zm8 0h4v14h-4V5z" />
             </svg>
           </button>
-          <button class="player-bar-btn" type="button" @click="player.playNext" aria-label="Следующий">››</button>
+          <button
+            class="player-bar-btn"
+            type="button"
+            aria-label="Следующий"
+            @click="() => player.playNext()"
+          >
+            ››
+          </button>
         </div>
 
         <div class="player-bar-right" @click.stop>
@@ -765,6 +820,31 @@ watch(
             <div class="player-full-info">
               <div class="player-full-title">{{ player.currentTrack.title }}</div>
               <div class="player-full-meta">{{ player.currentTrack.ownerUsername }}</div>
+              <div v-if="auth.user" class="player-full-like-wrap">
+                <button
+                  type="button"
+                  class="track-action-icon-btn player-full-like"
+                  :class="{ liked: playerTrackLiked }"
+                  :disabled="playerLikeBusy"
+                  aria-label="Лайк"
+                  @click.stop="togglePlayerLike"
+                >
+                  <svg
+                    class="track-action-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"
+                    />
+                  </svg>
+                </button>
+              </div>
             </div>
 
             <div class="player-full-progress" @click="player.seek">
@@ -795,7 +875,7 @@ watch(
                   <path fill="currentColor" d="M6 5h4v14H6V5zm8 0h4v14h-4V5z" />
                 </svg>
               </button>
-              <button class="player-bar-btn" type="button" @click="player.playNext">››</button>
+              <button class="player-bar-btn" type="button" @click="() => player.playNext()">››</button>
             </div>
 
             <div class="player-full-extra">

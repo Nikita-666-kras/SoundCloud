@@ -93,7 +93,13 @@ async function deleteAccount() {
       </div>
 
       <div v-else>
-        <div class="section-title">Тема</div>
+        <div class="section-title">Помощь</div>
+        <p class="muted" style="margin-bottom: 10px">Вопросы по сервису, баги и предложения.</p>
+        <router-link to="/support" class="primary-button" style="display: inline-flex; margin-bottom: 8px">
+          Чат с поддержкой
+        </router-link>
+
+        <div class="section-title" style="margin-top: 24px">Тема</div>
         <div class="auth-tabs">
           <button
             type="button"

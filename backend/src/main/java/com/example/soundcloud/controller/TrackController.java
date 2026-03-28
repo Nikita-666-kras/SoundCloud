@@ -87,8 +87,9 @@ public class TrackController {
         List<Track> pageContent = "recent".equalsIgnoreCase(sort)
                 ? trackService.listPageRecent(page, size)
                 : trackService.listPage(page, size);
+        User viewer = SecurityUtils.getCurrentUser(userService).orElse(null);
         return pageContent.stream()
-                .map(t -> trackService.toListItem(t, trackService.countLikes(t)))
+                .map(t -> trackService.toListItem(t, trackService.countLikes(t), viewer))
                 .toList();
     }
 
@@ -101,8 +102,9 @@ public class TrackController {
             return ResponseEntity.ok(List.of());
         }
         List<Track> tracks = trackService.searchTracks(q, page, size);
+        User viewer = SecurityUtils.getCurrentUser(userService).orElse(null);
         List<TrackDtos.TrackListItem> list = tracks.stream()
-                .map(t -> trackService.toListItem(t, trackService.countLikes(t)))
+                .map(t -> trackService.toListItem(t, trackService.countLikes(t), viewer))
                 .toList();
         return ResponseEntity.ok(list);
     }
@@ -133,7 +135,7 @@ public class TrackController {
         if (size <= 0 || size > 100) size = 20;
         List<Track> pageContent = trackService.listPageFromFollowing(user, page, size);
         List<TrackDtos.TrackListItem> list = pageContent.stream()
-                .map(t -> trackService.toListItem(t, trackService.countLikes(t)))
+                .map(t -> trackService.toListItem(t, trackService.countLikes(t), user))
                 .toList();
         return ResponseEntity.ok(list);
     }
@@ -172,7 +174,8 @@ public class TrackController {
             notificationService.createLikeNotification(track.getOwner(), user, track);
         }
         long likes = trackService.countLikes(track);
-        return ResponseEntity.ok(likes);
+        boolean likedByMe = trackService.userHasLiked(user, track);
+        return ResponseEntity.ok(new TrackDtos.TrackLikeResponse(likes, likedByMe));
     }
 
     @GetMapping("/{id}/comments")
@@ -289,7 +292,7 @@ public class TrackController {
         }
         Track updated = trackService.updateTrack(track, request);
         long likes = trackService.countLikes(updated);
-        TrackDtos.TrackListItem dto = trackService.toListItem(updated, likes);
+        TrackDtos.TrackListItem dto = trackService.toListItem(updated, likes, currentUser);
         return ResponseEntity.ok(dto);
     }
 

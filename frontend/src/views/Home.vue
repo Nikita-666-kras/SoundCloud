@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, watch, type WatchStopHandle } from 'vue';
 import { useRouter } from 'vue-router';
+import axios from 'axios';
 import { api } from '../api';
 import { useAuthStore } from '../stores/auth';
 import { usePlayerStore, type TrackListItem } from '../stores/player';
@@ -75,8 +76,175 @@ const addToPlaylistError = ref('');
 const addTrackToPlaylistLoading = ref<string | null>(null);
 const createPlaylistLoading = ref(false);
 
-type HomeTab = 'popular' | 'following' | 'recent';
+type HomeTab = 'popular' | 'following' | 'recent' | 'nonstop';
 const homeTab = ref<HomeTab>('popular');
+
+interface NonStopSlot {
+  track: TrackListItem;
+  promotionCampaignId: string | null;
+}
+
+const nonStopSlots = ref<NonStopSlot[]>([]);
+const nonStopLoading = ref(false);
+const nonStopStarted = ref(false);
+const nonStopPrefetching = ref(false);
+/** true если API /nonstop недоступен и собираем волну из /tracks (без промо) */
+const nonStopFallbackMode = ref(false);
+/** после 404/405 на /nonstop больше не дергаем эндпоинт (тише консоль и сеть) */
+const nonStopApiUnavailable = ref(false);
+
+function shuffleInPlace<T>(arr: T[]): void {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+}
+
+async function fetchTracksPoolForFallback(exclude: Set<string>, need: number): Promise<TrackListItem[]> {
+  const out: TrackListItem[] = [];
+  let page = 0;
+  while (out.length < need && page < 8) {
+    const res = await api.get<TrackListItem[]>('/tracks', {
+      params: { page, size: 40, sort: 'popular' }
+    });
+    if (!res.data?.length) break;
+    for (const t of res.data) {
+      if (!exclude.has(t.id)) out.push(t);
+    }
+    page++;
+  }
+  shuffleInPlace(out);
+  return out;
+}
+
+async function buildNonStopSlotsFromTracks(size: number, excludeIds: string[]): Promise<NonStopSlot[]> {
+  const exclude = new Set(excludeIds);
+  const pool = await fetchTracksPoolForFallback(exclude, size);
+  return pool.slice(0, size).map(track => ({ track, promotionCampaignId: null }));
+}
+
+/**
+ * Полная волна с бэкенда или запасной вариант из популярных треков (если /nonstop ещё не задеплоен).
+ */
+async function fetchNonStopPlaylist(size: number, excludeIds: string[] = []): Promise<NonStopSlot[]> {
+  const excludeParam = excludeIds.length ? excludeIds.join(',') : undefined;
+  if (nonStopApiUnavailable.value) {
+    nonStopFallbackMode.value = true;
+    return buildNonStopSlotsFromTracks(size, excludeIds);
+  }
+  try {
+    const res = await api.get<NonStopSlot[]>('/nonstop/playlist', {
+      params: { size, exclude: excludeParam }
+    });
+    nonStopApiUnavailable.value = false;
+    nonStopFallbackMode.value = false;
+    return Array.isArray(res.data) ? res.data : [];
+  } catch (e) {
+    const status = axios.isAxiosError(e) ? e.response?.status : undefined;
+    if (status === 404 || status === 405) {
+      nonStopApiUnavailable.value = true;
+      nonStopFallbackMode.value = true;
+      return buildNonStopSlotsFromTracks(size, excludeIds);
+    }
+    throw e;
+  }
+}
+
+function buildNonStopCampaignMap(slots: NonStopSlot[]) {
+  const map: Record<string, string> = {};
+  for (const s of slots) {
+    if (s.promotionCampaignId) map[s.track.id] = s.promotionCampaignId;
+  }
+  return map;
+}
+
+function rebindNonStopReporter() {
+  const map = buildNonStopCampaignMap(nonStopSlots.value);
+  const reporter = auth.user
+    ? async (event: 'SKIP' | 'FULL_LISTEN', trackId: string, campaignId: string) => {
+        try {
+          await api.post('/nonstop/feedback', { campaignId, trackId, event });
+        } catch {
+          /* нет эндпоинта или офлайн — не засоряем консоль */
+        }
+      }
+    : null;
+  player.setNonStopSession(map, reporter);
+}
+
+async function startNonStopWave() {
+  nonStopLoading.value = true;
+  nonStopApiUnavailable.value = false;
+  try {
+    const slots = await fetchNonStopPlaylist(20);
+    nonStopSlots.value = slots;
+    const queue = slots.map(s => s.track);
+    if (!queue.length) return;
+    rebindNonStopReporter();
+    player.setPlaybackMode('queue');
+    player.setQueueAndPlay(queue, queue[0].id);
+    nonStopStarted.value = true;
+  } catch (e) {
+    console.error(e);
+  } finally {
+    nonStopLoading.value = false;
+  }
+}
+
+async function prefetchNonStopQueue() {
+  if (homeTab.value !== 'nonstop' || !nonStopStarted.value || nonStopPrefetching.value) return;
+  const qlen = player.queue.length;
+  const idx = player.currentIndex;
+  if (qlen === 0 || idx < 0) return;
+  const remaining = qlen - 1 - idx;
+  if (remaining > 8) return;
+  nonStopPrefetching.value = true;
+  try {
+    const excludeIds = player.queue.map(t => t.id);
+    const more = await fetchNonStopPlaylist(14, excludeIds);
+    if (!more.length) return;
+    const map = buildNonStopCampaignMap(more);
+    player.appendToQueue(
+      more.map(s => s.track),
+      map
+    );
+    nonStopSlots.value = [...nonStopSlots.value, ...more];
+  } catch (e) {
+    console.error(e);
+  } finally {
+    nonStopPrefetching.value = false;
+  }
+}
+
+let nonStopPrefetchStop: WatchStopHandle | null = null;
+
+const nonStopCurrentSlot = computed((): NonStopSlot | null => {
+  const id = player.currentTrackId;
+  if (!id || !nonStopStarted.value) return null;
+  const hit = nonStopSlots.value.find(s => s.track.id === id);
+  if (hit) return hit;
+  const t = player.currentTrack;
+  if (!t) return null;
+  const cmap = player.nonStopCampaignByTrackId;
+  const cid = (id && cmap[id]) || null;
+  return { track: t, promotionCampaignId: cid };
+});
+
+/** Следующий в очереди плеера (совпадает с внутренней волной после догрузок) */
+const nonStopNextSlot = computed((): NonStopSlot | null => {
+  if (!nonStopStarted.value) return null;
+  const idx = player.currentIndex;
+  const q = player.queue;
+  if (idx < 0 || idx >= q.length - 1) return null;
+  const nextTrack = q[idx + 1];
+  const hit = nonStopSlots.value.find(s => s.track.id === nextTrack.id);
+  if (hit) return hit;
+  const cmap = player.nonStopCampaignByTrackId;
+  const cid = cmap[nextTrack.id] ?? null;
+  return { track: nextTrack, promotionCampaignId: cid };
+});
+
+const nonStopPromoInWave = computed(() => nonStopSlots.value.filter(s => s.promotionCampaignId).length);
 
 const popularAlbums = computed<PopularAlbum[]>(() => {
   const map = new Map<string, PopularAlbum>();
@@ -148,14 +316,26 @@ async function loadTracks() {
 
 function setHomeTab(tab: HomeTab) {
   if (homeTab.value === tab) return;
+  const prev = homeTab.value;
+  if (prev === 'nonstop' && tab !== 'nonstop') {
+    player.clearNonStopSession();
+  }
   homeTab.value = tab;
   page.value = 0;
   hasMore.value = true;
   tracks.value = [];
+  if (tab === 'nonstop') {
+    loadingTracks.value = false;
+    if (nonStopSlots.value.length) {
+      rebindNonStopReporter();
+    }
+    return;
+  }
   loadTracks();
 }
 
 function handleScroll() {
+  if (homeTab.value === 'nonstop') return;
   if (loadingTracks.value || !hasMore.value) return;
   const scrollPosition = window.innerHeight + window.scrollY;
   const threshold = document.body.offsetHeight - 400;
@@ -174,15 +354,52 @@ function playTrack(trackId: string) {
   }
 }
 
+function playNonStopTrack(trackId: string) {
+  const queue = nonStopSlots.value.map(s => s.track);
+  if (!queue.length) return;
+  rebindNonStopReporter();
+  player.setPlaybackMode('queue');
+  if (player.currentTrackId === trackId) {
+    player.togglePlay();
+  } else {
+    player.setQueueAndPlay(queue, trackId);
+  }
+}
+
+function nonStopSkipNext() {
+  player.playNext();
+}
+
 async function likeTrack(trackId: string) {
   if (!auth.user) {
     return;
   }
   try {
-    const res = await api.post<number>(`/tracks/${trackId}/like`);
-    tracks.value = tracks.value.map(t =>
-      t.id === trackId ? { ...t, likes: res.data } : t
-    );
+    const res = await api.post<{ likes: number; likedByMe: boolean }>(`/tracks/${trackId}/like`);
+    const { likes, likedByMe } = res.data;
+    const patch = (list: TrackListItem[]) =>
+      list.map(t => (t.id === trackId ? { ...t, likes, likedByMe } : t));
+    tracks.value = patch(tracks.value);
+    if (player.currentTrackId === trackId) {
+      player.patchTrackInQueue(trackId, { likes, likedByMe });
+    }
+    if (homeTab.value === 'nonstop') {
+      nonStopSlots.value = nonStopSlots.value.map(s =>
+        s.track.id === trackId ? { ...s, track: { ...s.track, likes, likedByMe } } : s
+      );
+      const slot = nonStopSlots.value.find(s => s.track.id === trackId);
+      if (slot?.promotionCampaignId) {
+        try {
+          await api.post('/nonstop/feedback', {
+            campaignId: slot.promotionCampaignId,
+            trackId,
+            event: 'LIKE'
+          });
+        } catch {
+          /* нет /nonstop/feedback на старом бэкенде */
+        }
+      }
+    }
   } catch (e) {
     console.error(e);
   }
@@ -397,6 +614,14 @@ onMounted(() => {
   if (auth.user && (homeTab.value === 'popular' || homeTab.value === 'recent')) {
     albumLikes.loadLiked();
   }
+  nonStopPrefetchStop = watch(
+    () => [homeTab.value, player.currentTrackId, player.currentIndex, player.queue.length] as const,
+    () => {
+      if (homeTab.value === 'nonstop') {
+        void prefetchNonStopQueue();
+      }
+    }
+  );
 });
 watch(
   () => [auth.user, homeTab.value],
@@ -404,12 +629,19 @@ watch(
     if (auth.user && (homeTab.value === 'popular' || homeTab.value === 'recent')) {
       albumLikes.loadLiked();
     }
+    if (homeTab.value === 'nonstop' && nonStopSlots.value.length) {
+      rebindNonStopReporter();
+    }
   },
   { immediate: true }
 );
 
 onBeforeUnmount(() => {
   window.removeEventListener('scroll', handleScroll);
+  nonStopPrefetchStop?.();
+  if (homeTab.value === 'nonstop') {
+    player.clearNonStopSession();
+  }
 });
 </script>
 
@@ -440,10 +672,18 @@ onBeforeUnmount(() => {
       >
         Новое
       </button>
+      <button
+        type="button"
+        class="home-tab"
+        :class="{ active: homeTab === 'nonstop' }"
+        @click="setHomeTab('nonstop')"
+      >
+        Нон-стоп
+      </button>
     </div>
 
     <!-- Альбомы: горизонтальная полоса сверху -->
-    <section v-if="(homeTab === 'popular' || homeTab === 'recent') && popularAlbums.length" class="card albums-strip-card">
+    <section v-if="homeTab !== 'nonstop' && (homeTab === 'popular' || homeTab === 'recent') && popularAlbums.length" class="card albums-strip-card">
       <div class="albums-strip-header">
         <div>
           <div class="card-title">{{ homeTab === 'recent' ? 'Новые альбомы' : 'Популярные альбомы' }}</div>
@@ -485,7 +725,206 @@ onBeforeUnmount(() => {
     </section>
 
     <div class="home-feed-row">
-    <section class="card tracks-card">
+    <section class="card tracks-card" :class="{ 'nonstop-wave-card': homeTab === 'nonstop' }">
+      <template v-if="homeTab === 'nonstop'">
+        <div class="nonstop-hero" aria-hidden="true">
+          <div class="nonstop-hero-inner">
+            <div class="nonstop-hero-kicker">Радио</div>
+            <h2 class="nonstop-hero-title">Нон-стоп волна</h2>
+            <p class="nonstop-hero-lead">
+              Показываем, что играет сейчас и что будет дальше; треки идут подряд без остановки, очередь подгружается сама.
+            </p>
+          </div>
+          <svg class="nonstop-hero-wave" viewBox="0 0 1200 120" preserveAspectRatio="none" aria-hidden="true">
+            <path
+              fill="currentColor"
+              fill-opacity="0.12"
+              d="M0,80 C200,20 400,100 600,55 C800,10 1000,90 1200,40 L1200,120 L0,120 Z"
+            />
+            <path
+              fill="none"
+              stroke="currentColor"
+              stroke-opacity="0.25"
+              stroke-width="2"
+              d="M0,65 Q300,15 600,50 T1200,35"
+            />
+          </svg>
+        </div>
+
+        <div class="nonstop-how-grid">
+          <div class="nonstop-how-card">
+            <div class="nonstop-how-icon" aria-hidden="true">◎</div>
+            <div class="nonstop-how-title">Под тебя</div>
+            <p class="nonstop-how-text muted">Смесь популярного, свежих загрузок и артистов из подписок.</p>
+          </div>
+          <div class="nonstop-how-card">
+            <div class="nonstop-how-icon" aria-hidden="true">✦</div>
+            <div class="nonstop-how-title">Промо в потоке</div>
+            <p class="nonstop-how-text muted">
+              Иногда в ленте встречаются продвигаемые треки — с меткой «Промо». Статистику по ним видно в «Мои релизы».
+            </p>
+          </div>
+          <div class="nonstop-how-card">
+            <div class="nonstop-how-icon" aria-hidden="true">∞</div>
+            <div class="nonstop-how-title">Без пауз</div>
+            <p class="nonstop-how-text muted">По окончании трека включается следующий автоматически. Список очереди на экране не показываем — только «далее».</p>
+          </div>
+        </div>
+
+        <div class="nonstop-toolbar">
+          <div class="nonstop-actions">
+            <button
+              type="button"
+              class="primary-button"
+              :disabled="nonStopLoading"
+              @click="startNonStopWave"
+            >
+              {{ nonStopLoading && !nonStopSlots.length ? 'Собираем…' : nonStopStarted ? 'Новая волна' : 'Слушать волну' }}
+            </button>
+            <button
+              v-if="nonStopStarted && player.queue.length"
+              type="button"
+              class="secondary-button"
+              @click="nonStopSkipNext"
+            >
+              Дальше
+            </button>
+            <span v-if="nonStopPrefetching" class="muted nonstop-prefetch-hint">Догружаем очередь…</span>
+          </div>
+          <p v-if="nonStopFallbackMode && nonStopSlots.length" class="muted nonstop-fallback-banner">
+            Работает упрощённый режим: сервер не отдаёт <code>/api/nonstop</code> — подмешиваем популярные треки без промо. Пересобери и перезапусти бэкенд, чтобы включить полную волну и статистику.
+          </p>
+        </div>
+
+        <div v-if="nonStopLoading && !nonStopSlots.length" class="nonstop-skeleton" aria-busy="true">
+          <div v-for="n in 6" :key="n" class="nonstop-skeleton-row">
+            <div class="nonstop-skeleton-cover" />
+            <div class="nonstop-skeleton-lines">
+              <div class="nonstop-skeleton-line nonstop-skeleton-line--title" />
+              <div class="nonstop-skeleton-line nonstop-skeleton-line--meta" />
+            </div>
+          </div>
+        </div>
+
+        <div v-else-if="!nonStopSlots.length" class="nonstop-empty-panel">
+          <p class="nonstop-empty-hint">
+            Нажми «Слушать волну» — соберём очередь. Войди в аккаунт, чтобы лайки и реакции по промо учитывались в статистике.
+          </p>
+          <div class="nonstop-empty-actions">
+            <button type="button" class="secondary-button" @click="router.push('/my-releases')">
+              Промо для своего трека
+            </button>
+            <button type="button" class="secondary-button" @click="setHomeTab('popular')">
+              Сначала лента «Популярное»
+            </button>
+          </div>
+        </div>
+
+        <div v-else class="nonstop-radio-stack">
+          <p
+            v-if="nonStopPromoInWave > 0 && nonStopStarted"
+            class="muted nonstop-mini-promo-hint"
+          >
+            В подборке есть промо — лайк и прослушивание до конца учитываются в отчёте артиста.
+          </p>
+
+          <div
+            v-if="nonStopCurrentSlot && nonStopStarted"
+            class="nonstop-now-card"
+          >
+            <div
+              v-if="nonStopCurrentSlot.track.coverUrl"
+              class="nonstop-now-cover"
+              @click="playNonStopTrack(nonStopCurrentSlot.track.id)"
+            >
+              <img :src="`http://localhost:8080${nonStopCurrentSlot.track.coverUrl}`" alt="" />
+            </div>
+            <div
+              v-else
+              class="nonstop-now-cover nonstop-now-cover-placeholder"
+              @click="playNonStopTrack(nonStopCurrentSlot.track.id)"
+            >
+              ♪
+            </div>
+            <div class="nonstop-now-body">
+              <div class="nonstop-now-label">Сейчас</div>
+              <div class="nonstop-now-title">{{ nonStopCurrentSlot.track.title }}</div>
+              <div class="nonstop-now-meta muted">
+                <span class="track-artist" @click.stop="goToArtist(nonStopCurrentSlot.track.ownerId)">
+                  {{ nonStopCurrentSlot.track.ownerUsername }}
+                </span>
+                <span
+                  v-if="nonStopCurrentSlot.promotionCampaignId"
+                  class="nonstop-promo-pill nonstop-promo-pill--inline"
+                >Промо</span>
+              </div>
+            </div>
+            <div class="nonstop-now-side-actions">
+              <button
+                v-if="auth.user"
+                type="button"
+                class="track-action-icon-btn nonstop-now-like"
+                :class="{ liked: !!nonStopCurrentSlot.track.likedByMe }"
+                aria-label="Лайк"
+                @click.stop="likeTrack(nonStopCurrentSlot.track.id)"
+              >
+                <svg class="track-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                <span v-if="nonStopCurrentSlot.track.likes > 0" class="track-action-count">{{ nonStopCurrentSlot.track.likes }}</span>
+              </button>
+              <button
+                type="button"
+                class="track-action-play nonstop-now-play"
+                :aria-label="player.isPlaying ? 'Пауза' : 'Играть'"
+                @click="playNonStopTrack(nonStopCurrentSlot.track.id)"
+              >
+                <svg
+                  v-if="player.isPlaying"
+                  class="track-action-play-svg"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path fill="currentColor" d="M6 5h4v14H6V5zm8 0h4v14h-4V5z" />
+                </svg>
+                <svg v-else class="track-action-play-svg" viewBox="0 0 24 24" aria-hidden="true">
+                  <path fill="currentColor" d="M8 5.14v13.72L19 12 8 5.14z" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div
+            v-if="nonStopNextSlot"
+            class="nonstop-next-card"
+          >
+            <div
+              v-if="nonStopNextSlot.track.coverUrl"
+              class="nonstop-next-thumb"
+            >
+              <img :src="`http://localhost:8080${nonStopNextSlot.track.coverUrl}`" alt="" />
+            </div>
+            <div v-else class="nonstop-next-thumb nonstop-next-thumb-placeholder">♪</div>
+            <div class="nonstop-next-body">
+              <div class="nonstop-next-kicker">Следующий</div>
+              <div class="nonstop-next-title">{{ nonStopNextSlot.track.title }}</div>
+              <div class="nonstop-next-meta muted">
+                <span>{{ nonStopNextSlot.track.ownerUsername }}</span>
+                <span
+                  v-if="nonStopNextSlot.promotionCampaignId"
+                  class="nonstop-promo-pill nonstop-promo-pill--inline"
+                >Промо</span>
+              </div>
+            </div>
+          </div>
+          <div
+            v-else-if="nonStopStarted && player.queue.length"
+            class="nonstop-next-wait muted"
+          >
+            Следующий трек подбирается…
+          </div>
+        </div>
+      </template>
+
+      <template v-else>
       <div class="card-header">
         <div>
           <div class="card-title">Лента треков</div>
@@ -544,7 +983,7 @@ onBeforeUnmount(() => {
               <button
                 type="button"
                 class="track-action-icon-btn"
-                :class="{ liked: track.likes > 0 }"
+                :class="{ liked: !!track.likedByMe }"
                 aria-label="Лайк"
                 @click.stop="likeTrack(track.id)"
               >
@@ -652,6 +1091,7 @@ onBeforeUnmount(() => {
       </div>
 
       <!-- Глобальный плеер теперь в App.vue -->
+      </template>
     </section>
     </div>
 

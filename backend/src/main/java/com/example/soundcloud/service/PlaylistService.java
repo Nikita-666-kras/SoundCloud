@@ -64,11 +64,11 @@ public class PlaylistService {
         );
     }
 
-    public PlaylistDtos.PlaylistDetails toDetails(Playlist playlist) {
+    public PlaylistDtos.PlaylistDetails toDetails(Playlist playlist, User viewer) {
         List<PlaylistTrack> pts = playlistTrackRepository.findByPlaylistOrderByPositionAsc(playlist);
         List<TrackDtos.TrackListItem> items = pts.stream()
                 .map(PlaylistTrack::getTrack)
-                .map(t -> trackService.toListItem(t, trackService.countLikes(t)))
+                .map(t -> trackService.toListItem(t, trackService.countLikes(t), viewer))
                 .toList();
         return new PlaylistDtos.PlaylistDetails(
                 playlist.getId(),

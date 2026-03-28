@@ -64,7 +64,7 @@ public class PlaylistController {
         User currentUser = SecurityUtils.getCurrentUser(userService).orElseThrow(() -> new ResponseStatusException(UNAUTHORIZED));
         return playlistRepository.findById(id)
                 .filter(p -> p.getOwner().getId().equals(currentUser.getId()))
-                .map(playlistService::toDetails)
+                .map(p -> playlistService.toDetails(p, currentUser))
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }

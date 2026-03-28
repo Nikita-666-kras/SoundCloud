@@ -31,8 +31,12 @@ public class TrackDtos {
             String ownerUsername,
             long playCount,
             long likes,
+            boolean likedByMe,
             LocalDateTime createdAt
     ) {
+    }
+
+    public record TrackLikeResponse(long likes, boolean likedByMe) {
     }
 
     public record TrackUpdateRequest(

@@ -23,6 +23,77 @@ const deletingTrackId = ref<string | null>(null);
 const deleteAlbumConfirm = ref<string | null>(null);
 const deletingAlbumName = ref<string | null>(null);
 
+interface PromotionMineItem {
+  id: string;
+  trackId: string;
+  trackTitle: string;
+  maxImpressions: number;
+  servedCount: number;
+  skipCount: number;
+  likeCount: number;
+  fullListenCount: number;
+  active: boolean;
+}
+
+const promotions = ref<PromotionMineItem[]>([]);
+const promotionsLoading = ref(false);
+const promoModalTrackId = ref<string | null>(null);
+const promoMaxImpressions = ref(100);
+const promoSubmitting = ref(false);
+const promoError = ref('');
+
+function promoForTrack(trackId: string) {
+  return promotions.value.find(p => p.trackId === trackId);
+}
+
+function hasActivePromo(trackId: string) {
+  return promotions.value.some(p => p.trackId === trackId && p.active);
+}
+
+async function loadPromotions() {
+  if (!auth.user) return;
+  promotionsLoading.value = true;
+  try {
+    const res = await api.get<PromotionMineItem[]>('/promotions/mine');
+    promotions.value = Array.isArray(res.data) ? res.data : [];
+  } catch (e) {
+    console.error(e);
+  } finally {
+    promotionsLoading.value = false;
+  }
+}
+
+function openPromoModal(trackId: string) {
+  promoModalTrackId.value = trackId;
+  promoMaxImpressions.value = 100;
+  promoError.value = '';
+}
+
+function closePromoModal() {
+  promoModalTrackId.value = null;
+  promoError.value = '';
+}
+
+async function submitPromo() {
+  if (!auth.user || !promoModalTrackId.value) return;
+  const max = Math.min(50_000, Math.max(1, Number(promoMaxImpressions.value) || 100));
+  promoSubmitting.value = true;
+  promoError.value = '';
+  try {
+    await api.post<PromotionMineItem>('/promotions', {
+      trackId: promoModalTrackId.value,
+      maxImpressions: max
+    });
+    closePromoModal();
+    await loadPromotions();
+  } catch (e) {
+    console.error(e);
+    promoError.value = 'Не удалось запустить промо (возможно, уже есть активная кампания на этот трек).';
+  } finally {
+    promoSubmitting.value = false;
+  }
+}
+
 interface AlbumGroup {
   name: string;
   displayName: string;
@@ -53,8 +124,11 @@ onMounted(async () => {
   if (!auth.user) return;
   loading.value = true;
   try {
-    const res = await api.get<TrackListItem[]>(`/users/${auth.user.id}/tracks`);
-    tracks.value = res.data;
+    const [tracksRes] = await Promise.all([
+      api.get<TrackListItem[]>(`/users/${auth.user.id}/tracks`),
+      loadPromotions()
+    ]);
+    tracks.value = tracksRes.data;
   } catch (e) {
     console.error(e);
   } finally {
@@ -176,6 +250,33 @@ function goToAlbumEdit(albumName: string) {
     </div>
 
     <template v-else>
+      <section class="card my-releases-promo-card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Промо в «Нон-стоп»</div>
+            <div class="muted">
+              Кампания даёт треку слоты в потоке «Нон-стоп» на главной. Считаются показы, скипы, лайки и дослушивания до конца.
+            </div>
+          </div>
+        </div>
+        <div v-if="promotionsLoading" class="muted">Загружаем кампании…</div>
+        <div v-else-if="!promotions.length" class="muted">Пока нет кампаний. Запусти промо у нужного трека ниже.</div>
+        <div v-else class="my-releases-promo-list">
+          <div v-for="p in promotions" :key="p.id" class="my-releases-promo-row">
+            <div>
+              <div class="track-title">{{ p.trackTitle }}</div>
+              <div class="muted my-releases-promo-stats">
+                Показы: {{ p.servedCount }} / {{ p.maxImpressions }}
+                · скип {{ p.skipCount }}
+                · лайки {{ p.likeCount }}
+                · до конца {{ p.fullListenCount }}
+                <span v-if="!p.active" class="my-releases-promo-done"> · завершена</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- Мои альбомы: горизонтальная полоса сверху -->
       <section v-if="albumsWithName.length" class="card albums-strip-card my-releases-albums-strip">
         <div class="albums-strip-header">
@@ -286,6 +387,14 @@ function goToAlbumEdit(albumName: string) {
                   <button class="secondary-button" type="button" @click.stop="startEdit(track)">
                     Редактировать
                   </button>
+                  <button
+                    v-if="!hasActivePromo(track.id)"
+                    type="button"
+                    class="secondary-button"
+                    @click.stop="openPromoModal(track.id)"
+                  >
+                    Промо в нон-стоп
+                  </button>
                   <div class="cover-upload-wrap">
                     <input
                       type="file"
@@ -314,6 +423,15 @@ function goToAlbumEdit(albumName: string) {
                     </button>
                   </template>
                 </div>
+              </div>
+
+              <div v-if="promoForTrack(track.id)" class="comments-block my-releases-promo-inline muted">
+                Кампания:
+                {{ promoForTrack(track.id)!.servedCount }}/{{ promoForTrack(track.id)!.maxImpressions }} показов
+                · скип {{ promoForTrack(track.id)!.skipCount }}
+                · ♥ {{ promoForTrack(track.id)!.likeCount }}
+                · до конца {{ promoForTrack(track.id)!.fullListenCount }}
+                <template v-if="!promoForTrack(track.id)!.active"> (завершена)</template>
               </div>
 
               <div v-if="editingId === track.id" class="comments-block my-releases-edit-form">
@@ -348,6 +466,42 @@ function goToAlbumEdit(albumName: string) {
 
           <p v-if="errorMessage" class="muted" style="margin-top: 12px; color: #f97373">{{ errorMessage }}</p>
         </section>
+      </div>
+
+      <div
+        v-if="promoModalTrackId"
+        class="modal-overlay"
+        @click.self="closePromoModal"
+      >
+        <div class="modal-card">
+          <div class="modal-header">
+            <div class="modal-title">Промо в нон-стоп</div>
+            <button class="modal-close" type="button" @click="closePromoModal">×</button>
+          </div>
+          <p class="muted">Сколько раз трек может быть показан в чужих волнах (после лимита кампания остановится).</p>
+          <div class="input-group" style="margin-top: 12px">
+            <label class="input-label">Лимит показов</label>
+            <input
+              v-model.number="promoMaxImpressions"
+              type="number"
+              min="1"
+              max="50000"
+              class="input-control"
+            />
+          </div>
+          <p v-if="promoError" class="muted" style="color: #f97373; margin-top: 8px">{{ promoError }}</p>
+          <div class="modal-footer" style="margin-top: 16px">
+            <button type="button" class="secondary-button" @click="closePromoModal">Отмена</button>
+            <button
+              type="button"
+              class="primary-button"
+              :disabled="promoSubmitting"
+              @click="submitPromo"
+            >
+              {{ promoSubmitting ? 'Создаём…' : 'Запустить' }}
+            </button>
+          </div>
+        </div>
       </div>
     </template>
   </div>

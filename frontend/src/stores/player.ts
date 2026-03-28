@@ -10,6 +10,8 @@ export interface TrackListItem {
   ownerUsername: string;
   playCount: number;
   likes: number;
+  /** лайк текущего пользователя (если не пришло с API — считаем false) */
+  likedByMe?: boolean;
   createdAt: string;
   coverUrl?: string | null;
 }
@@ -18,10 +20,20 @@ const VOLUME_KEY = 'slapshous_volume';
 
 type PlaybackMode = 'queue' | 'shuffle' | 'repeat';
 
+export type NonStopFeedbackEvent = 'SKIP' | 'FULL_LISTEN';
+
+export type NonStopReporter = (
+  event: NonStopFeedbackEvent,
+  trackId: string,
+  campaignId: string
+) => void | Promise<void>;
+
 export const usePlayerStore = defineStore('player', () => {
   const queue = ref<TrackListItem[]>([]);
   const currentTrackId = ref<string | null>(null);
   const audioElement = ref<HTMLAudioElement | null>(null);
+  const nonStopCampaignByTrackId = ref<Record<string, string>>({});
+  const nonStopReporter = ref<NonStopReporter | null>(null);
 
   const isPlaying = ref(false);
   const currentTime = ref(0);
@@ -112,8 +124,46 @@ export const usePlayerStore = defineStore('player', () => {
     playTrack(queue.value[index].id);
   }
 
-  function playNext() {
+  function setNonStopSession(campaignByTrackId: Record<string, string>, reporter: NonStopReporter | null) {
+    nonStopCampaignByTrackId.value = { ...campaignByTrackId };
+    nonStopReporter.value = reporter;
+  }
+
+  function clearNonStopSession() {
+    nonStopCampaignByTrackId.value = {};
+    nonStopReporter.value = null;
+  }
+
+  function appendToQueue(tracks: TrackListItem[], extraCampaignMap?: Record<string, string>) {
+    if (!tracks.length) return;
+    queue.value = [...queue.value, ...tracks];
+    if (extraCampaignMap && Object.keys(extraCampaignMap).length) {
+      nonStopCampaignByTrackId.value = { ...nonStopCampaignByTrackId.value, ...extraCampaignMap };
+    }
+  }
+
+  function patchTrackInQueue(
+    trackId: string,
+    patch: Partial<Pick<TrackListItem, 'likes' | 'likedByMe'>>
+  ) {
+    queue.value = queue.value.map(t => (t.id === trackId ? { ...t, ...patch } : t));
+  }
+
+  function emitNonStopFeedback(event: NonStopFeedbackEvent) {
+    const tid = currentTrackId.value;
+    const rep = nonStopReporter.value;
+    if (!tid || !rep) return Promise.resolve();
+    const cid = nonStopCampaignByTrackId.value[tid];
+    if (!cid) return Promise.resolve();
+    return Promise.resolve(rep(event, tid, cid)).catch(() => {});
+  }
+
+  function playNext(opts?: { fromNaturalEnd?: boolean }) {
     if (!queue.value.length) return;
+    const fromNaturalEnd = opts?.fromNaturalEnd === true;
+    if (!fromNaturalEnd) {
+      void emitNonStopFeedback('SKIP');
+    }
     const idx = currentIndex.value;
     if (playbackMode.value === 'repeat') {
       if (idx !== -1) {
@@ -179,7 +229,9 @@ export const usePlayerStore = defineStore('player', () => {
         playByIndex(currentIndex.value);
       }
     } else {
-      playNext();
+      void emitNonStopFeedback('FULL_LISTEN').finally(() => {
+        playNext({ fromNaturalEnd: true });
+      });
     }
   }
 
@@ -226,9 +278,14 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
 
+  function setPlaybackMode(mode: PlaybackMode) {
+    playbackMode.value = mode;
+  }
+
   return {
     // state
     queue,
+    nonStopCampaignByTrackId,
     currentTrackId,
     isPlaying,
     currentTime,
@@ -236,9 +293,14 @@ export const usePlayerStore = defineStore('player', () => {
     volume,
     currentTrack,
     progressPercent,
+    currentIndex,
     playbackMode,
     // actions
     setAudioElement,
+    setNonStopSession,
+    clearNonStopSession,
+    appendToQueue,
+    patchTrackInQueue,
     setQueueAndPlay,
     playTrack,
     togglePlay,
@@ -250,7 +312,8 @@ export const usePlayerStore = defineStore('player', () => {
     seek,
     formatTime,
     changeVolume,
-    cyclePlaybackMode
+    cyclePlaybackMode,
+    setPlaybackMode
   };
 });
 
