@@ -82,6 +82,7 @@ const createPlaylistLoading = ref(false);
 type HomeTab = 'popular' | 'following' | 'recent' | 'nonstop';
 const homeTab = ref<HomeTab>('popular');
 
+/** Элемент волны «Нон-стоп»: трек и id промо (для /nonstop/feedback). */
 interface NonStopSlot {
   track: TrackListItem;
   promotionCampaignId: string | null;
@@ -129,7 +130,7 @@ async function buildNonStopSlotsFromTracks(size: number, excludeIds: string[]): 
 }
 
 /**
- * Полная волна с бэкенда или запасной вариант из популярных треков (если /nonstop ещё не задеплоен).
+ * Плейлист волны: GET /nonstop/playlist или fallback из /tracks при 404/405.
  */
 async function fetchNonStopPlaylist(size: number, excludeIds: string[] = []): Promise<NonStopSlot[]> {
   const excludeParam = excludeIds.length ? excludeIds.join(',') : undefined;
@@ -430,6 +431,7 @@ async function loadComments(trackId: string) {
   }
 }
 
+/** Лента и нон-стоп делят один кэш комментариев по id трека. */
 async function toggleComments(trackId: string) {
   const currentlyOpen = !!commentsOpen.value[trackId];
   commentsOpen.value[trackId] = !currentlyOpen;
@@ -817,90 +819,298 @@ onBeforeUnmount(() => {
             В подборке есть промо — лайк и прослушивание до конца учитываются в отчёте артиста.
           </p>
 
+          <!-- Текущий трек волны: действия и комментарии как в ленте -->
           <div
             v-if="nonStopCurrentSlot && nonStopStarted"
-            class="nonstop-now-card"
+            class="nonstop-now-wrap"
           >
-            <div
-              v-if="nonStopCurrentSlot.track.coverUrl"
-              class="nonstop-now-cover"
-              @click="playNonStopTrack(nonStopCurrentSlot.track.id)"
-            >
-              <img :src="assetUrl(nonStopCurrentSlot.track.coverUrl)" alt="" />
-            </div>
-            <div
-              v-else
-              class="nonstop-now-cover nonstop-now-cover-placeholder"
-              @click="playNonStopTrack(nonStopCurrentSlot.track.id)"
-            >
-              ♪
-            </div>
-            <div class="nonstop-now-body">
-              <div class="nonstop-now-label">Сейчас</div>
-              <div class="nonstop-now-title">{{ nonStopCurrentSlot.track.title }}</div>
-              <div class="nonstop-now-meta muted">
-                <span class="track-artist" @click.stop="goToArtist(nonStopCurrentSlot.track.ownerId)">
-                  {{ nonStopCurrentSlot.track.ownerUsername }}
-                </span>
-                <span
-                  v-if="nonStopCurrentSlot.promotionCampaignId"
-                  class="nonstop-promo-pill nonstop-promo-pill--inline"
-                >Промо</span>
-              </div>
-            </div>
-            <div class="nonstop-now-side-actions">
-              <button
-                v-if="auth.user"
-                type="button"
-                class="track-action-icon-btn nonstop-now-like"
-                :class="{ liked: !!nonStopCurrentSlot.track.likedByMe }"
-                aria-label="Лайк"
-                @click.stop="likeTrack(nonStopCurrentSlot.track.id)"
-              >
-                <svg class="track-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-                <span v-if="nonStopCurrentSlot.track.likes > 0" class="track-action-count">{{ nonStopCurrentSlot.track.likes }}</span>
-              </button>
-              <button
-                type="button"
-                class="track-action-play nonstop-now-play"
-                :aria-label="player.isPlaying ? 'Пауза' : 'Играть'"
+            <div class="nonstop-now-card">
+              <div
+                v-if="nonStopCurrentSlot.track.coverUrl"
+                class="nonstop-now-cover"
                 @click="playNonStopTrack(nonStopCurrentSlot.track.id)"
               >
-                <svg
-                  v-if="player.isPlaying"
-                  class="track-action-play-svg"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
+                <img :src="assetUrl(nonStopCurrentSlot.track.coverUrl)" alt="" />
+              </div>
+              <div
+                v-else
+                class="nonstop-now-cover nonstop-now-cover-placeholder"
+                @click="playNonStopTrack(nonStopCurrentSlot.track.id)"
+              >
+                ♪
+              </div>
+              <div class="nonstop-now-body">
+                <div class="nonstop-now-label">Сейчас</div>
+                <div class="nonstop-now-title" :title="nonStopCurrentSlot.track.title">
+                  {{ nonStopCurrentSlot.track.title }}
+                </div>
+                <div class="nonstop-now-meta muted">
+                  <span
+                    class="track-artist nonstop-now-artist"
+                    :title="nonStopCurrentSlot.track.ownerUsername"
+                    @click.stop="goToArtist(nonStopCurrentSlot.track.ownerId)"
+                  >
+                    {{ nonStopCurrentSlot.track.ownerUsername }}
+                  </span>
+                  <span
+                    v-if="nonStopCurrentSlot.promotionCampaignId"
+                    class="nonstop-promo-pill nonstop-promo-pill--inline"
+                  >Промо</span>
+                </div>
+              </div>
+              <div class="nonstop-now-side-actions">
+                <div class="nonstop-now-icon-row">
+                  <button
+                    v-if="auth.user"
+                    type="button"
+                    class="track-action-icon-btn nonstop-now-like"
+                    :class="{ liked: !!nonStopCurrentSlot.track.likedByMe }"
+                    aria-label="Лайк"
+                    @click.stop="likeTrack(nonStopCurrentSlot.track.id)"
+                  >
+                    <svg class="track-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                    <span v-if="nonStopCurrentSlot.track.likes > 0" class="track-action-count">{{ nonStopCurrentSlot.track.likes }}</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="track-action-icon-btn"
+                    aria-label="Комментарии"
+                    @click.stop="toggleComments(nonStopCurrentSlot.track.id)"
+                  >
+                    <svg class="track-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                  </button>
+                  <button
+                    v-if="auth.user"
+                    type="button"
+                    class="track-action-icon-btn"
+                    aria-label="Ещё"
+                    @click.stop="openTrackActionsModal(nonStopCurrentSlot.track.id)"
+                  >
+                    <svg class="track-action-icon" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  class="track-action-play nonstop-now-play"
+                  :aria-label="player.isPlaying ? 'Пауза' : 'Играть'"
+                  @click="playNonStopTrack(nonStopCurrentSlot.track.id)"
                 >
-                  <path fill="currentColor" d="M6 5h4v14H6V5zm8 0h4v14h-4V5z" />
-                </svg>
-                <svg v-else class="track-action-play-svg" viewBox="0 0 24 24" aria-hidden="true">
-                  <path fill="currentColor" d="M8 5.14v13.72L19 12 8 5.14z" />
-                </svg>
-              </button>
+                  <svg
+                    v-if="player.isPlaying"
+                    class="track-action-play-svg"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path fill="currentColor" d="M6 5h4v14H6V5zm8 0h4v14h-4V5z" />
+                  </svg>
+                  <svg v-else class="track-action-play-svg" viewBox="0 0 24 24" aria-hidden="true">
+                    <path fill="currentColor" d="M8 5.14v13.72L19 12 8 5.14z" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div
+              v-if="commentsOpen[nonStopCurrentSlot.track.id]"
+              class="comments-block nonstop-comments-block"
+            >
+              <div v-if="commentsLoading[nonStopCurrentSlot.track.id]" class="muted">Загружаем комментарии...</div>
+              <div v-else>
+                <div
+                  v-if="!(commentsByTrack[nonStopCurrentSlot.track.id] && commentsByTrack[nonStopCurrentSlot.track.id].length)"
+                  class="muted"
+                >
+                  Пока нет комментариев. Будь первым.
+                </div>
+                <div v-else class="comments-list">
+                  <div
+                    v-for="comment in commentsByTrack[nonStopCurrentSlot.track.id]"
+                    :key="comment.id"
+                    class="comment-row"
+                  >
+                    <div class="comment-author">{{ comment.username }}</div>
+                    <div class="comment-text">{{ comment.text }}</div>
+                  </div>
+                </div>
+              </div>
+              <div v-if="auth.user" class="input-group" style="margin-top: 6px">
+                <textarea
+                  v-model="newCommentText[nonStopCurrentSlot.track.id]"
+                  class="input-control-textarea"
+                  rows="2"
+                  placeholder="Напиши комментарий"
+                />
+                <button
+                  class="secondary-button"
+                  type="button"
+                  style="align-self: flex-end; margin-top: 4px"
+                  @click="submitComment(nonStopCurrentSlot.track.id)"
+                >
+                  Отправить
+                </button>
+              </div>
+              <div v-else class="muted" style="margin-top: 4px">
+                Чтобы комментировать, войди или зарегистрируйся.
+              </div>
+            </div>
+
+            <div
+              v-if="auth.user && reportOpen[nonStopCurrentSlot.track.id]"
+              class="comments-block nonstop-comments-block"
+            >
+              <div class="section-title">Жалоба на трек</div>
+              <div class="input-group">
+                <select v-model="reportReason[nonStopCurrentSlot.track.id]" class="input-control">
+                  <option value="Нарушение авторских прав">Нарушение авторских прав</option>
+                  <option value="Непристойное содержание">Непристойное содержание</option>
+                  <option value="Другое">Другое</option>
+                </select>
+              </div>
+              <div class="input-group">
+                <textarea
+                  v-model="reportText[nonStopCurrentSlot.track.id]"
+                  class="input-control-textarea"
+                  rows="3"
+                  placeholder="Опиши проблему (опционально)"
+                />
+              </div>
+              <div class="form-footer">
+                <button class="secondary-button" type="button" @click="toggleReport(nonStopCurrentSlot.track.id)">
+                  Отмена
+                </button>
+                <button
+                  class="primary-button"
+                  type="button"
+                  :disabled="reportSending[nonStopCurrentSlot.track.id]"
+                  @click="submitReport(nonStopCurrentSlot.track.id)"
+                >
+                  {{ reportSending[nonStopCurrentSlot.track.id] ? 'Отправляем...' : 'Отправить жалобу' }}
+                </button>
+              </div>
             </div>
           </div>
 
-          <div
-            v-if="nonStopNextSlot"
-            class="nonstop-next-card"
-          >
-            <div
-              v-if="nonStopNextSlot.track.coverUrl"
-              class="nonstop-next-thumb"
-            >
-              <img :src="assetUrl(nonStopNextSlot.track.coverUrl)" alt="" />
+          <div v-if="nonStopNextSlot" class="nonstop-next-wrap">
+            <div class="nonstop-next-card">
+              <div
+                v-if="nonStopNextSlot.track.coverUrl"
+                class="nonstop-next-thumb"
+              >
+                <img :src="assetUrl(nonStopNextSlot.track.coverUrl)" alt="" />
+              </div>
+              <div v-else class="nonstop-next-thumb nonstop-next-thumb-placeholder">♪</div>
+              <div class="nonstop-next-body">
+                <div class="nonstop-next-kicker">Следующий</div>
+                <div class="nonstop-next-title" :title="nonStopNextSlot.track.title">
+                  {{ nonStopNextSlot.track.title }}
+                </div>
+                <div class="nonstop-next-meta muted">
+                  <span class="nonstop-next-artist" :title="nonStopNextSlot.track.ownerUsername">{{
+                    nonStopNextSlot.track.ownerUsername
+                  }}</span>
+                  <span
+                    v-if="nonStopNextSlot.promotionCampaignId"
+                    class="nonstop-promo-pill nonstop-promo-pill--inline"
+                  >Промо</span>
+                </div>
+              </div>
+              <div class="nonstop-next-actions">
+                <button
+                  type="button"
+                  class="track-action-icon-btn nonstop-next-action-btn"
+                  aria-label="Комментарии"
+                  @click.stop="toggleComments(nonStopNextSlot.track.id)"
+                >
+                  <svg class="track-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                </button>
+                <button
+                  v-if="auth.user"
+                  type="button"
+                  class="track-action-icon-btn nonstop-next-action-btn"
+                  aria-label="Ещё"
+                  @click.stop="openTrackActionsModal(nonStopNextSlot.track.id)"
+                >
+                  <svg class="track-action-icon" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+                </button>
+              </div>
             </div>
-            <div v-else class="nonstop-next-thumb nonstop-next-thumb-placeholder">♪</div>
-            <div class="nonstop-next-body">
-              <div class="nonstop-next-kicker">Следующий</div>
-              <div class="nonstop-next-title">{{ nonStopNextSlot.track.title }}</div>
-              <div class="nonstop-next-meta muted">
-                <span>{{ nonStopNextSlot.track.ownerUsername }}</span>
-                <span
-                  v-if="nonStopNextSlot.promotionCampaignId"
-                  class="nonstop-promo-pill nonstop-promo-pill--inline"
-                >Промо</span>
+
+            <div
+              v-if="commentsOpen[nonStopNextSlot.track.id]"
+              class="comments-block nonstop-comments-block"
+            >
+              <div v-if="commentsLoading[nonStopNextSlot.track.id]" class="muted">Загружаем комментарии...</div>
+              <div v-else>
+                <div
+                  v-if="!(commentsByTrack[nonStopNextSlot.track.id] && commentsByTrack[nonStopNextSlot.track.id].length)"
+                  class="muted"
+                >
+                  Пока нет комментариев. Будь первым.
+                </div>
+                <div v-else class="comments-list">
+                  <div
+                    v-for="comment in commentsByTrack[nonStopNextSlot.track.id]"
+                    :key="comment.id"
+                    class="comment-row"
+                  >
+                    <div class="comment-author">{{ comment.username }}</div>
+                    <div class="comment-text">{{ comment.text }}</div>
+                  </div>
+                </div>
+              </div>
+              <div v-if="auth.user" class="input-group" style="margin-top: 6px">
+                <textarea
+                  v-model="newCommentText[nonStopNextSlot.track.id]"
+                  class="input-control-textarea"
+                  rows="2"
+                  placeholder="Напиши комментарий"
+                />
+                <button
+                  class="secondary-button"
+                  type="button"
+                  style="align-self: flex-end; margin-top: 4px"
+                  @click="submitComment(nonStopNextSlot.track.id)"
+                >
+                  Отправить
+                </button>
+              </div>
+              <div v-else class="muted" style="margin-top: 4px">
+                Чтобы комментировать, войди или зарегистрируйся.
+              </div>
+            </div>
+
+            <div
+              v-if="auth.user && reportOpen[nonStopNextSlot.track.id]"
+              class="comments-block nonstop-comments-block"
+            >
+              <div class="section-title">Жалоба на трек</div>
+              <div class="input-group">
+                <select v-model="reportReason[nonStopNextSlot.track.id]" class="input-control">
+                  <option value="Нарушение авторских прав">Нарушение авторских прав</option>
+                  <option value="Непристойное содержание">Непристойное содержание</option>
+                  <option value="Другое">Другое</option>
+                </select>
+              </div>
+              <div class="input-group">
+                <textarea
+                  v-model="reportText[nonStopNextSlot.track.id]"
+                  class="input-control-textarea"
+                  rows="3"
+                  placeholder="Опиши проблему (опционально)"
+                />
+              </div>
+              <div class="form-footer">
+                <button class="secondary-button" type="button" @click="toggleReport(nonStopNextSlot.track.id)">
+                  Отмена
+                </button>
+                <button
+                  class="primary-button"
+                  type="button"
+                  :disabled="reportSending[nonStopNextSlot.track.id]"
+                  @click="submitReport(nonStopNextSlot.track.id)"
+                >
+                  {{ reportSending[nonStopNextSlot.track.id] ? 'Отправляем...' : 'Отправить жалобу' }}
+                </button>
               </div>
             </div>
           </div>

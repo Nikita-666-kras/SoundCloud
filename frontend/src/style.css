@@ -440,6 +440,15 @@ body.dark-theme .nonstop-mini-promo-hint {
   border-color: rgba(167, 139, 250, 0.18);
 }
 
+.nonstop-now-wrap,
+.nonstop-next-wrap {
+  margin-bottom: 4px;
+}
+
+.nonstop-comments-block {
+  margin-top: 10px;
+}
+
 .nonstop-now-side-actions {
   display: flex;
   flex-direction: column;
@@ -448,8 +457,41 @@ body.dark-theme .nonstop-mini-promo-hint {
   flex-shrink: 0;
 }
 
+.nonstop-now-icon-row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  max-width: 120px;
+}
+
 .nonstop-now-like {
   margin: 0;
+}
+
+.nonstop-now-artist {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nonstop-next-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.nonstop-next-action-btn {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
 }
 
 .nonstop-next-card {
@@ -507,10 +549,9 @@ body.dark-theme .nonstop-next-card {
   font-weight: 600;
   font-size: 0.88rem;
   line-height: 1.25;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .nonstop-next-meta {
@@ -520,6 +561,15 @@ body.dark-theme .nonstop-next-card {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  min-width: 0;
+}
+
+.nonstop-next-artist {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .nonstop-next-wait {
@@ -1113,6 +1163,7 @@ body.dark-theme .comments-block {
 body.dark-theme .player-bar {
   background: rgba(15, 23, 42, 0.98);
   border-top-color: rgba(30, 64, 175, 0.5);
+  --player-bar-title-color: #f9fafb;
 }
 
 .card-header {
@@ -2802,6 +2853,8 @@ body:not(.dark-theme) .player-bar-volume-flyout {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* На тёмной полоске — светлый текст; в светлой теме задаётся --player-bar-title-color на .player-bar */
+  color: var(--player-bar-title-color, #f8fafc);
 }
 
 .player-bar-meta {
@@ -2951,6 +3004,12 @@ body:not(.dark-theme) .player-bar-volume-flyout {
 
 .player-bar-expand:hover {
   color: #fff;
+}
+
+/* Светлая тема: полоска плеера остаётся тёмной; заголовок — светлый (не наследовать --text-primary с body) */
+body:not(.dark-theme) .player-bar {
+  border-top-color: rgba(255, 255, 255, 0.1);
+  --player-bar-title-color: #f3f4f6;
 }
 
 .player-progress {
