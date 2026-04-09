@@ -16,7 +16,6 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/nonstop")
-@CrossOrigin(origins = "http://localhost:5173", allowCredentials = "true")
 public class NonStopController {
 
     private final NonStopService nonStopService;

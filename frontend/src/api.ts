@@ -1,7 +1,8 @@
 import axios, { type AxiosError } from 'axios';
 import { useAuthStore } from './stores/auth';
+import { getApiBaseUrl } from './config';
 
-const BASE_URL = 'http://localhost:8080/api';
+const BASE_URL = getApiBaseUrl();
 
 export const api = axios.create({
   baseURL: BASE_URL,

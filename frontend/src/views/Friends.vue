@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref, computed } from 'vue';
 import { api } from '../api';
+import { assetUrl } from '../config';
 import { useAuthStore } from '../stores/auth';
 
 interface FriendSummary {
@@ -165,7 +166,7 @@ onMounted(() => {
               <div class="avatar-wrapper" style="width: 40px; height: 40px">
                 <img
                   v-if="u.avatarUrl"
-                  :src="`http://localhost:8080/api/users/${u.id}/avatar`"
+                  :src="assetUrl(`/api/users/${u.id}/avatar`)"
                   alt="avatar"
                   class="avatar-image"
                 />
@@ -237,7 +238,7 @@ onMounted(() => {
                   <div class="avatar-wrapper" style="width: 40px; height: 40px">
                     <img
                       v-if="f.avatarUrl"
-                      :src="`http://localhost:8080/api/users/${f.id}/avatar`"
+                      :src="assetUrl(`/api/users/${f.id}/avatar`)"
                       alt="avatar"
                       class="avatar-image"
                     />
@@ -268,7 +269,7 @@ onMounted(() => {
                   <div class="avatar-wrapper" style="width: 40px; height: 40px">
                     <img
                       v-if="r.user.avatarUrl"
-                      :src="`http://localhost:8080/api/users/${r.user.id}/avatar`"
+                      :src="assetUrl(`/api/users/${r.user.id}/avatar`)"
                       alt="avatar"
                       class="avatar-image"
                     />
@@ -300,7 +301,7 @@ onMounted(() => {
                   <div class="avatar-wrapper" style="width: 40px; height: 40px">
                     <img
                       v-if="r.user.avatarUrl"
-                      :src="`http://localhost:8080/api/users/${r.user.id}/avatar`"
+                      :src="assetUrl(`/api/users/${r.user.id}/avatar`)"
                       alt="avatar"
                       class="avatar-image"
                     />

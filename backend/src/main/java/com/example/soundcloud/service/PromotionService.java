@@ -8,6 +8,7 @@ import com.example.soundcloud.repository.PromotionCampaignRepository;
 import com.example.soundcloud.repository.TrackRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -71,8 +72,10 @@ public class PromotionService {
 
     /**
      * Резервирует один показ промо: увеличивает servedCount, при достижении лимита деактивирует кампанию.
+     * Отдельная транзакция: вызывается из {@link NonStopService#buildPlaylist}, у которого read-only TX,
+     * иначе инкременты могут не сохраниться.
      */
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Optional<NonStopDtos.NonStopTrackSlot> tryReservePromotedSlot(Set<UUID> excludeTrackIds, TrackService trackService, User viewerOrNull) {
         List<PromotionCampaign> eligible = promotionCampaignRepository.findActiveWithRemainingSlots().stream()
                 .filter(c -> !excludeTrackIds.contains(c.getTrack().getId()))

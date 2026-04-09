@@ -20,7 +20,6 @@ import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 
 @RestController
 @RequestMapping("/api/friends")
-@CrossOrigin(origins = "http://localhost:5173", allowCredentials = "true")
 public class FriendController {
 
     private final FriendService friendService;

@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia';
+import { getApiBaseUrl } from '../config';
 
 export interface User {
   id: string;
@@ -73,7 +74,7 @@ export const useAuthStore = defineStore('auth', {
       this.clearAuth();
       if (refresh) {
         try {
-          await fetch('http://localhost:8080/api/auth/logout', {
+          await fetch(`${getApiBaseUrl()}/auth/logout`, {
             method: 'POST',
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' },

@@ -15,7 +15,6 @@ import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 
 @RestController
 @RequestMapping("/api/albums")
-@CrossOrigin(origins = "http://localhost:5173", allowCredentials = "true")
 public class AlbumController {
 
     private final AlbumLikeService albumLikeService;

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref } from 'vue';
 import { api } from '../api';
+import { assetUrl } from '../config';
 import { useAuthStore } from '../stores/auth';
 import { useRouter } from 'vue-router';
 
@@ -128,7 +129,7 @@ onBeforeUnmount(() => {
       <div class="card-header">
         <div>
           <div class="card-title">Любимые артисты</div>
-          <div class="muted">Артисты, на которых ты подписан</div>
+          <!-- <div class="muted">Артисты, на которых ты подписан</div> -->
         </div>
       </div>
 
@@ -138,7 +139,7 @@ onBeforeUnmount(() => {
 
       <template v-else>
         <div class="input-group artist-nick-block">
-          <label class="input-label" for="artist-nick-input">Найти артиста по нику</label>
+          <!-- <label class="input-label" for="artist-nick-input">Найти артиста по нику</label> -->
           <div class="artist-nick-search-wrap">
             <input
               id="artist-nick-input"
@@ -146,7 +147,7 @@ onBeforeUnmount(() => {
               type="search"
               autocomplete="off"
               class="input-control"
-              placeholder="Начните вводить ник — как в поисковике"
+              placeholder="Начните вводить ник артиста"
               @focus="onNickFocus"
               @input="onNickInput"
             />
@@ -164,7 +165,7 @@ onBeforeUnmount(() => {
                   <div class="avatar-wrapper artist-nick-avatar">
                     <img
                       v-if="a.avatarUrl"
-                      :src="`http://localhost:8080/api/users/${a.id}/avatar`"
+                      :src="assetUrl(`/api/users/${a.id}/avatar`)"
                       alt=""
                       class="avatar-image"
                     />
@@ -208,7 +209,7 @@ onBeforeUnmount(() => {
               <div class="avatar-wrapper">
                 <img
                   v-if="artist.avatarUrl"
-                  :src="`http://localhost:8080/api/users/${artist.id}/avatar`"
+                  :src="assetUrl(`/api/users/${artist.id}/avatar`)"
                   alt="avatar"
                   class="avatar-image"
                 />

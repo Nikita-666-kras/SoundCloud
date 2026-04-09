@@ -37,7 +37,6 @@ import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 
 @RestController
 @RequestMapping("/api/tracks")
-@CrossOrigin(origins = "http://localhost:5173", allowCredentials = "true")
 public class TrackController {
 
     private final TrackService trackService;

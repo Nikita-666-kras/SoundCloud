@@ -2,6 +2,7 @@
 import { onMounted, ref, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { api } from '../api';
+import { assetUrl } from '../config';
 import { useAuthStore } from '../stores/auth';
 import { usePlayerStore, type TrackListItem } from '../stores/player';
 
@@ -140,7 +141,7 @@ function playTrack(trackId: string) {
             <div class="avatar-wrapper" style="width: 56px; height: 56px">
               <img
                 v-if="artist.avatarUrl"
-                :src="`http://localhost:8080/api/users/${artist.id}/avatar`"
+                :src="assetUrl(`/api/users/${artist.id}/avatar`)"
                 alt="avatar"
                 class="avatar-image"
               />
@@ -182,7 +183,7 @@ function playTrack(trackId: string) {
           >
             <div class="track-index">
               <div v-if="track.coverUrl" class="track-cover">
-                <img :src="`http://localhost:8080${track.coverUrl}`" alt="cover" />
+                <img :src="assetUrl(track.coverUrl)" alt="cover" />
               </div>
               <div class="track-number">#{{ index + 1 }}</div>
             </div>
@@ -228,7 +229,7 @@ function playTrack(trackId: string) {
             @click="router.push(`/artist/${artistId}/album/${encodeURIComponent(album.name)}`)"
           >
             <div v-if="album.coverUrl" class="album-cover">
-              <img :src="`http://localhost:8080${album.coverUrl}`" alt="cover" />
+              <img :src="assetUrl(album.coverUrl)" alt="cover" />
             </div>
             <div v-else class="album-cover album-cover-placeholder">
               {{ album.name.charAt(0).toUpperCase() }}

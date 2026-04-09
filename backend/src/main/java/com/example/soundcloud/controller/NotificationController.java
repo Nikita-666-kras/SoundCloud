@@ -16,7 +16,6 @@ import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 
 @RestController
 @RequestMapping("/api/notifications")
-@CrossOrigin(origins = "http://localhost:5173", allowCredentials = "true")
 public class NotificationController {
 
     private final NotificationService notificationService;
@@ -52,6 +51,13 @@ public class NotificationController {
         User user = SecurityUtils.getCurrentUser(userService).orElseThrow(() -> new ResponseStatusException(UNAUTHORIZED));
         long count = notificationService.unreadCount(user);
         return ResponseEntity.ok(count);
+    }
+
+    @PostMapping("/read-all")
+    public ResponseEntity<?> markAllRead() {
+        User user = SecurityUtils.getCurrentUser(userService).orElseThrow(() -> new ResponseStatusException(UNAUTHORIZED));
+        notificationService.markAllRead(user);
+        return ResponseEntity.ok().build();
     }
 
     @PostMapping("/{id}/read")

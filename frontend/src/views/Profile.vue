@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import { api } from '../api';
+import { assetUrl } from '../config';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 
@@ -44,7 +45,7 @@ function goToEditProfile() {
         <div class="auth-actions" style="margin-bottom: 8px">
           <div v-if="auth.user.avatarUrl" class="avatar-wrapper" style="width: 56px; height: 56px">
             <img
-              :src="`http://localhost:8080/api/users/${auth.user.id}/avatar`"
+              :src="assetUrl(`/api/users/${auth.user.id}/avatar`)"
               alt="avatar"
               class="avatar-image"
             />

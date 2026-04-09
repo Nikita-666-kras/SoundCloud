@@ -1,0 +1,17 @@
+---
+description: После правок фронтенда пересобирать и перезапускать Docker-контейнер frontend
+globs: frontend/**/*
+alwaysApply: false
+---
+
+# Docker frontend после изменений
+
+После любых изменений в каталоге `frontend/` **в конце сессии правок** выполни из корня репозитория `D:\SoundCloud` (PowerShell):
+
+```powershell
+cd D:\SoundCloud; docker compose build frontend; docker compose up -d frontend
+```
+
+Если Docker недоступен или команда не удалась — кратко опиши ошибку пользователю.
+
+Не считай задачу по UI завершённой, пока контейнер не пересобран (или явно не сказано, что пользователь запускает только `npm run dev` без Docker).

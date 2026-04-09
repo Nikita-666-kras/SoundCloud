@@ -15,6 +15,7 @@ interface NotificationState {
   items: NotificationItem[];
   unreadCount: number;
   open: boolean;
+  markAllReadLoading: boolean;
 }
 
 import { api } from '../api';
@@ -23,7 +24,8 @@ export const useNotificationStore = defineStore('notifications', {
   state: (): NotificationState => ({
     items: [],
     unreadCount: 0,
-    open: false
+    open: false,
+    markAllReadLoading: false
   }),
   actions: {
     async load() {
@@ -59,6 +61,19 @@ export const useNotificationStore = defineStore('notifications', {
         );
       } catch (e) {
         console.error(e);
+      }
+    },
+    async markAllRead() {
+      if (!this.unreadCount || this.markAllReadLoading) return;
+      this.markAllReadLoading = true;
+      try {
+        await api.post('/notifications/read-all');
+        this.items = this.items.map(n => ({ ...n, read: true }));
+        this.unreadCount = 0;
+      } catch (e) {
+        console.error(e);
+      } finally {
+        this.markAllReadLoading = false;
       }
     }
   }

@@ -2,9 +2,13 @@
 import { onMounted, ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { api } from '../api';
+import { assetUrl } from '../config';
 import { useAuthStore } from '../stores/auth';
 import { usePlayerStore, type TrackListItem } from '../stores/player';
 import { useAlbumLikesStore } from '../stores/albumLikes';
+import { useTrackFavoritesStore } from '../stores/trackFavorites';
+import { useTrackRowActions } from '../composables/useTrackRowActions';
+import TrackRowActionsModals from '../components/TrackRowActionsModals.vue';
 
 interface PlaylistSummary {
   id: string;
@@ -18,10 +22,13 @@ const router = useRouter();
 const auth = useAuthStore();
 const player = usePlayerStore();
 const albumLikes = useAlbumLikesStore();
+const trackFavorites = useTrackFavoritesStore();
 
 const likedTracks = ref<TrackListItem[]>([]);
 const playlists = ref<PlaylistSummary[]>([]);
 const loading = ref(true);
+
+const trackActions = useTrackRowActions(likedTracks, { removeOnUnlike: true });
 
 const likedPreview = computed(() => likedTracks.value.slice(0, 3));
 const myPlaylists = computed(() =>
@@ -44,6 +51,7 @@ async function load() {
       albumLikes.loadLiked()
     ]);
     likedTracks.value = tracksRes.data ?? [];
+    trackFavorites.mergeIds(likedTracks.value.map(t => t.id));
     playlists.value = playlistsRes.data ?? [];
   } catch (e) {
     console.error(e);
@@ -101,36 +109,97 @@ onMounted(() => load());
                 class="track-row"
                 :class="{ active: player.currentTrackId === track.id }"
               >
-                <div class="track-index">
-                  <div class="track-number">#{{ index + 1 }}</div>
-                </div>
-                <div class="track-main" @click="playTrack(track.id)">
-                  <div class="track-title">{{ track.title }}</div>
-                  <div class="track-meta">
-                    <span class="track-artist" @click.stop="goToArtist(track.ownerId)">
-                      {{ track.ownerUsername }}
-                    </span>
+                <div class="track-row-body-feed">
+                  <div class="track-row-left">
+                    <button
+                      type="button"
+                      class="track-action-play"
+                      :aria-label="player.currentTrackId === track.id && player.isPlaying ? 'Пауза' : 'Воспроизвести'"
+                      @click.stop="playTrack(track.id)"
+                    >
+                      <svg
+                        v-if="player.currentTrackId === track.id && player.isPlaying"
+                        class="track-action-play-svg"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <path fill="currentColor" d="M6 5h4v14H6V5zm8 0h4v14h-4V5z" />
+                      </svg>
+                      <svg v-else class="track-action-play-svg" viewBox="0 0 24 24" aria-hidden="true">
+                        <path fill="currentColor" d="M8 5.14v13.72L19 12 8 5.14z" />
+                      </svg>
+                    </button>
+                    <div class="track-main" @click="playTrack(track.id)">
+                      <div class="track-title-row">
+                        <span class="track-number" style="margin-right: 6px">#{{ index + 1 }}</span>
+                        <span>{{ track.title }}</span>
+                      </div>
+                      <div class="track-meta track-artist-line">
+                        <span class="track-artist" @click.stop="goToArtist(track.ownerId)">
+                          {{ track.ownerUsername }}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div v-if="auth.user" class="track-row-actions">
+                    <button
+                      type="button"
+                      class="track-action-icon-btn"
+                      :class="{ liked: !!track.likedByMe }"
+                      aria-label="Лайк"
+                      @click.stop="trackActions.likeTrack(track.id)"
+                    >
+                      <svg class="track-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                      <span v-if="track.likes > 0" class="track-action-count">{{ track.likes }}</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="track-action-icon-btn"
+                      aria-label="Ещё"
+                      @click.stop="trackActions.openTrackActionsModal(track.id)"
+                    >
+                      <svg class="track-action-icon" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+                    </button>
                   </div>
                 </div>
-                <div class="track-actions">
-                  <button
-                    type="button"
-                    class="track-action-play"
-                    :aria-label="player.currentTrackId === track.id && player.isPlaying ? 'Пауза' : 'Воспроизвести'"
-                    @click.stop="playTrack(track.id)"
-                  >
-                    <svg
-                      v-if="player.currentTrackId === track.id && player.isPlaying"
-                      class="track-action-play-svg"
-                      viewBox="0 0 24 24"
-                      aria-hidden="true"
+                <div
+                  v-if="auth.user && trackActions.reportOpen[track.id]"
+                  class="comments-block"
+                  style="margin-top: 6px"
+                >
+                  <div class="section-title">Жалоба на трек</div>
+                  <div class="input-group">
+                    <select v-model="trackActions.reportReason[track.id]" class="input-control">
+                      <option value="Нарушение авторских прав">Нарушение авторских прав</option>
+                      <option value="Непристойное содержание">Непристойное содержание</option>
+                      <option value="Другое">Другое</option>
+                    </select>
+                  </div>
+                  <div class="input-group">
+                    <textarea
+                      v-model="trackActions.reportText[track.id]"
+                      class="input-control-textarea"
+                      rows="3"
+                      placeholder="Опиши проблему (опционально)"
+                    />
+                  </div>
+                  <div class="form-footer">
+                    <button
+                      class="secondary-button"
+                      type="button"
+                      @click="trackActions.toggleReport(track.id)"
                     >
-                      <path fill="currentColor" d="M6 5h4v14H6V5zm8 0h4v14h-4V5z" />
-                    </svg>
-                    <svg v-else class="track-action-play-svg" viewBox="0 0 24 24" aria-hidden="true">
-                      <path fill="currentColor" d="M8 5.14v13.72L19 12 8 5.14z" />
-                    </svg>
-                  </button>
+                      Отмена
+                    </button>
+                    <button
+                      class="primary-button"
+                      type="button"
+                      :disabled="trackActions.reportSending[track.id]"
+                      @click="trackActions.submitReport(track.id)"
+                    >
+                      {{ trackActions.reportSending[track.id] ? 'Отправляем...' : 'Отправить жалобу' }}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -168,7 +237,7 @@ onMounted(() => load());
                   ❤
                 </button>
                 <div class="popular-album-image" v-if="album.coverUrl">
-                  <img :src="`http://localhost:8080${album.coverUrl}`" alt="cover" />
+                  <img :src="assetUrl(album.coverUrl)" alt="cover" />
                 </div>
                 <div class="popular-album-overlay">
                   <div class="popular-album-title">{{ album.album }}</div>
@@ -236,6 +305,8 @@ onMounted(() => load());
           </section>
         </div>
       </div>
+
+      <TrackRowActionsModals :api="trackActions" />
     </template>
   </div>
 </template>

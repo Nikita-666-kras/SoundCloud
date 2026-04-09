@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { onMounted, ref, computed } from 'vue';
+import { onMounted, onUnmounted, ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { api } from '../api';
+import { assetUrl } from '../config';
 import { useAuthStore } from '../stores/auth';
 import { usePlayerStore, type TrackListItem } from '../stores/player';
 
@@ -42,12 +43,41 @@ const promoMaxImpressions = ref(100);
 const promoSubmitting = ref(false);
 const promoError = ref('');
 
+function normalizePromotion(p: PromotionMineItem): PromotionMineItem {
+  return {
+    ...p,
+    servedCount: Number(p.servedCount) || 0,
+    maxImpressions: Number(p.maxImpressions) || 0,
+    skipCount: Number(p.skipCount) || 0,
+    likeCount: Number(p.likeCount) || 0,
+    fullListenCount: Number(p.fullListenCount) || 0
+  };
+}
+
+/** Одна кампания на трек в UI: активная, иначе самая новая (порядок списка с API). */
+const promoByTrackId = computed(() => {
+  const list = promotions.value;
+  const byTrack = new Map<string, PromotionMineItem[]>();
+  for (const p of list) {
+    const tid = String(p.trackId);
+    if (!byTrack.has(tid)) byTrack.set(tid, []);
+    byTrack.get(tid)!.push(p);
+  }
+  const out = new Map<string, PromotionMineItem>();
+  for (const [tid, arr] of byTrack) {
+    const active = arr.find(x => x.active);
+    out.set(tid, active ?? arr[0]);
+  }
+  return out;
+});
+
 function promoForTrack(trackId: string) {
-  return promotions.value.find(p => p.trackId === trackId);
+  return promoByTrackId.value.get(String(trackId));
 }
 
 function hasActivePromo(trackId: string) {
-  return promotions.value.some(p => p.trackId === trackId && p.active);
+  const tid = String(trackId);
+  return promotions.value.some(p => String(p.trackId) === tid && p.active);
 }
 
 async function loadPromotions() {
@@ -55,11 +85,18 @@ async function loadPromotions() {
   promotionsLoading.value = true;
   try {
     const res = await api.get<PromotionMineItem[]>('/promotions/mine');
-    promotions.value = Array.isArray(res.data) ? res.data : [];
+    const raw = Array.isArray(res.data) ? res.data : [];
+    promotions.value = raw.map(normalizePromotion);
   } catch (e) {
     console.error(e);
   } finally {
     promotionsLoading.value = false;
+  }
+}
+
+function onVisibilityChange() {
+  if (document.visibilityState === 'visible' && auth.user) {
+    loadPromotions();
   }
 }
 
@@ -122,6 +159,7 @@ const flatTracks = computed(() => tracks.value);
 
 onMounted(async () => {
   if (!auth.user) return;
+  document.addEventListener('visibilitychange', onVisibilityChange);
   loading.value = true;
   try {
     const [tracksRes] = await Promise.all([
@@ -134,6 +172,10 @@ onMounted(async () => {
   } finally {
     loading.value = false;
   }
+});
+
+onUnmounted(() => {
+  document.removeEventListener('visibilitychange', onVisibilityChange);
 });
 
 function startEdit(track: TrackListItem) {
@@ -242,7 +284,7 @@ function goToAlbumEdit(albumName: string) {
 </script>
 
 <template>
-  <div class="home-layout">
+  <div class="home-layout my-releases-page">
     <div v-if="!auth.user" class="layout-single">
       <section class="card">
         <div class="muted">Чтобы управлять релизами, войди или зарегистрируйся.</div>
@@ -266,11 +308,15 @@ function goToAlbumEdit(albumName: string) {
             <div>
               <div class="track-title">{{ p.trackTitle }}</div>
               <div class="muted my-releases-promo-stats">
-                Показы: {{ p.servedCount }} / {{ p.maxImpressions }}
-                · скип {{ p.skipCount }}
-                · лайки {{ p.likeCount }}
-                · до конца {{ p.fullListenCount }}
-                <span v-if="!p.active" class="my-releases-promo-done"> · завершена</span>
+                <div class="my-releases-promo-stat-line">
+                  Показы: {{ p.servedCount }} / {{ p.maxImpressions }}
+                  <span v-if="!p.active" class="my-releases-promo-done"> · завершена</span>
+                </div>
+                <div class="my-releases-promo-stat-line">
+                  скип {{ p.skipCount }}
+                  · лайки {{ p.likeCount }}
+                  · до конца {{ p.fullListenCount }}
+                </div>
               </div>
             </div>
           </div>
@@ -296,7 +342,7 @@ function goToAlbumEdit(albumName: string) {
               @click="goToAlbumEdit(album.name)"
             >
               <div class="popular-album-image" v-if="album.coverUrl">
-                <img :src="`http://localhost:8080${album.coverUrl}`" alt="cover" />
+                <img :src="assetUrl(album.coverUrl)" alt="cover" />
               </div>
               <div v-else class="popular-album-image popular-album-placeholder">⌘</div>
               <div class="popular-album-overlay">
@@ -350,7 +396,7 @@ function goToAlbumEdit(albumName: string) {
                 :class="{ 'track-post-cover-placeholder': !track.coverUrl }"
                 @click="playTrack(track.id)"
               >
-                <img v-if="track.coverUrl" :src="`http://localhost:8080${track.coverUrl}`" alt="cover" />
+                <img v-if="track.coverUrl" :src="assetUrl(track.coverUrl)" alt="cover" />
                 <span v-else class="track-post-cover-icon">♪</span>
               </div>
               <div class="track-row-body">
@@ -366,6 +412,7 @@ function goToAlbumEdit(albumName: string) {
                   </div>
                 </div>
                 <div class="track-actions my-releases-track-actions">
+                  <div class="my-releases-track-actions-group">
                   <button
                     type="button"
                     class="track-action-play"
@@ -393,7 +440,7 @@ function goToAlbumEdit(albumName: string) {
                     class="secondary-button"
                     @click.stop="openPromoModal(track.id)"
                   >
-                    Промо в нон-стоп
+                    Запустить промо
                   </button>
                   <div class="cover-upload-wrap">
                     <input
@@ -402,8 +449,10 @@ function goToAlbumEdit(albumName: string) {
                       class="cover-upload-input"
                       @change="changeCover(track.id, $event)"
                     />
-                    <button class="secondary-button" type="button" tabindex="-1">Обложка</button>
+                    <button class="secondary-button" type="button" tabindex="-1">Сменить обложку</button>
                   </div>
+                  </div>
+                  <div class="my-releases-track-actions-danger">
                   <template v-if="deleteTrackConfirm !== track.id">
                     <button type="button" class="secondary-button my-releases-delete-btn" @click.stop="deleteTrackConfirm = track.id">
                       Удалить
@@ -422,16 +471,21 @@ function goToAlbumEdit(albumName: string) {
                       Отмена
                     </button>
                   </template>
+                  </div>
                 </div>
               </div>
 
               <div v-if="promoForTrack(track.id)" class="comments-block my-releases-promo-inline muted">
-                Кампания:
-                {{ promoForTrack(track.id)!.servedCount }}/{{ promoForTrack(track.id)!.maxImpressions }} показов
-                · скип {{ promoForTrack(track.id)!.skipCount }}
-                · ♥ {{ promoForTrack(track.id)!.likeCount }}
-                · до конца {{ promoForTrack(track.id)!.fullListenCount }}
-                <template v-if="!promoForTrack(track.id)!.active"> (завершена)</template>
+                <div class="my-releases-promo-stat-line">
+                  Кампания:
+                  {{ promoForTrack(track.id)!.servedCount }}/{{ promoForTrack(track.id)!.maxImpressions }} показов
+                  <template v-if="!promoForTrack(track.id)!.active"> (завершена)</template>
+                </div>
+                <div class="my-releases-promo-stat-line">
+                  скип {{ promoForTrack(track.id)!.skipCount }}
+                  · ♥ {{ promoForTrack(track.id)!.likeCount }}
+                  · до конца {{ promoForTrack(track.id)!.fullListenCount }}
+                </div>
               </div>
 
               <div v-if="editingId === track.id" class="comments-block my-releases-edit-form">

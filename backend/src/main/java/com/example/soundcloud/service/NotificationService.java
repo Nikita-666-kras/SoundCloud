@@ -102,5 +102,10 @@ public class NotificationService {
         n.setRead(true);
         notificationRepository.save(n);
     }
+
+    @Transactional
+    public int markAllRead(User user) {
+        return notificationRepository.markAllReadForUser(user);
+    }
 }
 

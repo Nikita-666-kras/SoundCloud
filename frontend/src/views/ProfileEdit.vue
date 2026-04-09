@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import { api } from '../api';
+import { assetUrl } from '../config';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 
@@ -83,7 +84,7 @@ async function saveProfile() {
           <div class="auth-actions">
             <div v-if="auth.user.avatarUrl" class="avatar-wrapper">
               <img
-                :src="`http://localhost:8080/api/users/${auth.user.id}/avatar`"
+                :src="assetUrl(`/api/users/${auth.user.id}/avatar`)"
                 alt="avatar"
                 class="avatar-image"
               />

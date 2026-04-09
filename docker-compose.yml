@@ -1,52 +1,82 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: soundcloud-postgres
+    environment:
+      POSTGRES_DB: soundcloud
+      POSTGRES_USER: soundcloud
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-soundcloud}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U soundcloud -d soundcloud']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
   backend:
     build: ./backend
     container_name: soundcloud-backend
     ports:
-      - "8080:8080"
-    volumes:
-      - ./backend/data:/app/data
+      - '127.0.0.1:8080:8080'
     environment:
-      # MinIO
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/soundcloud
+      SPRING_DATASOURCE_USERNAME: soundcloud
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-soundcloud}
+      # slapshous.ru + локальная разработка
+      APP_CORS_ALLOWED_ORIGINS: https://slapshous.ru,https://www.slapshous.ru,http://slapshous.ru,http://www.slapshous.ru,http://localhost:5173,http://127.0.0.1:5173
+      JWT_SECRET: ${JWT_SECRET:-dev-only-change-me-use-long-random-string-in-real-prod}
       MINIO_URL: http://minio:9000
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
       MINIO_BUCKET_AUDIO: tracks
       MINIO_BUCKET_IMAGES: images
-      # Redis
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
     depends_on:
-      - redis
-      - minio
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      minio:
+        condition: service_started
+    restart: unless-stopped
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        VITE_APP_ORIGIN: ''
     container_name: soundcloud-frontend
     ports:
-      - "5173:80"
+      - '127.0.0.1:5173:80'
     depends_on:
       - backend
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
     container_name: soundcloud-redis
     ports:
-      - "6379:6379"
+      - '127.0.0.1:6379:6379'
+    restart: unless-stopped
 
   minio:
     image: minio/minio:RELEASE.2024-01-31T20-20-33Z
     container_name: soundcloud-minio
-    command: server /data --console-address ":9001"
+    command: server /data --console-address ':9001'
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - '127.0.0.1:9000:9000'
+      - '127.0.0.1:9001:9001'
     volumes:
       - minio-data:/data
+    restart: unless-stopped
 
 volumes:
+  postgres-data:
   minio-data:
-

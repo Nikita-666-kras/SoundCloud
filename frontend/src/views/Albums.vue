@@ -2,6 +2,7 @@
 import { onMounted, ref, computed, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { api } from '../api';
+import { assetUrl } from '../config';
 import { useAuthStore } from '../stores/auth';
 import { useAlbumLikesStore } from '../stores/albumLikes';
 import type { AlbumSummary } from '../stores/albumLikes';
@@ -90,12 +91,12 @@ watch(sort, () => {
 <template>
   <div class="layout-single">
     <section class="card">
-      <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px">
-        <div>
+      <div class="card-header albums-card-header">
+        <div class="albums-card-header-text">
           <div class="card-title">Альбомы</div>
           <div class="muted">Популярные и новые альбомы</div>
         </div>
-        <div class="albums-sort-tabs">
+        <div class="albums-sort-tabs" role="tablist" aria-label="Сортировка альбомов">
           <button
             type="button"
             class="home-tab"
@@ -147,7 +148,7 @@ watch(sort, () => {
             ❤
           </button>
           <div class="popular-album-image" v-if="album.coverUrl">
-            <img :src="`http://localhost:8080${album.coverUrl}`" alt="cover" />
+            <img :src="assetUrl(album.coverUrl)" alt="cover" />
           </div>
             <div class="popular-album-overlay">
             <div class="popular-album-title">{{ album.album }}</div>

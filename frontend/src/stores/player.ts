@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
+import { getApiBaseUrl } from '../config';
 
 export interface TrackListItem {
   id: string;
@@ -74,8 +75,15 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
 
+  function normalizeTrackForQueue(t: TrackListItem): TrackListItem {
+    return {
+      ...t,
+      likedByMe: t.likedByMe === true,
+    };
+  }
+
   function setQueueAndPlay(tracks: TrackListItem[], trackId: string) {
-    queue.value = tracks;
+    queue.value = tracks.map(normalizeTrackForQueue);
     playTrack(trackId);
   }
 
@@ -85,7 +93,7 @@ export const usePlayerStore = defineStore('player', () => {
 
     const audio = audioElement.value;
     audio.volume = volume.value;
-    audio.src = `http://localhost:8080/api/tracks/${trackId}/stream`;
+    audio.src = `${getApiBaseUrl()}/tracks/${trackId}/stream`;
     audio
       .play()
       .then(() => {
@@ -136,7 +144,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   function appendToQueue(tracks: TrackListItem[], extraCampaignMap?: Record<string, string>) {
     if (!tracks.length) return;
-    queue.value = [...queue.value, ...tracks];
+    queue.value = [...queue.value, ...tracks.map(normalizeTrackForQueue)];
     if (extraCampaignMap && Object.keys(extraCampaignMap).length) {
       nonStopCampaignByTrackId.value = { ...nonStopCampaignByTrackId.value, ...extraCampaignMap };
     }

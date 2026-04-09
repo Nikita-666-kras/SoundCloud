@@ -7,6 +7,10 @@ RUN npm install
 
 COPY . .
 
+# Пусто = тот же origin, что и SPA (nginx проксирует /api на backend)
+ARG VITE_APP_ORIGIN=
+ENV VITE_APP_ORIGIN=$VITE_APP_ORIGIN
+
 RUN npm run build
 
 FROM nginx:1.27-alpine

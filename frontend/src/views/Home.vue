@@ -3,9 +3,11 @@ import { ref, computed, onMounted, onBeforeUnmount, watch, type WatchStopHandle 
 import { useRouter } from 'vue-router';
 import axios from 'axios';
 import { api } from '../api';
+import { assetUrl } from '../config';
 import { useAuthStore } from '../stores/auth';
 import { usePlayerStore, type TrackListItem } from '../stores/player';
 import { useAlbumLikesStore } from '../stores/albumLikes';
+import { useTrackFavoritesStore } from '../stores/trackFavorites';
 
 interface Comment {
   id: string;
@@ -44,6 +46,7 @@ const router = useRouter();
 const auth = useAuthStore();
 const player = usePlayerStore();
 const albumLikes = useAlbumLikesStore();
+const trackFavorites = useTrackFavoritesStore();
 const tracks = ref<TrackListItem[]>([]);
 const loadingTracks = ref(false);
 const page = ref(0);
@@ -92,6 +95,8 @@ const nonStopPrefetching = ref(false);
 const nonStopFallbackMode = ref(false);
 /** после 404/405 на /nonstop больше не дергаем эндпоинт (тише консоль и сеть) */
 const nonStopApiUnavailable = ref(false);
+const nonStopAnimationEnabled = ref(true);
+const NONSTOP_ANIMATION_STORAGE_KEY = 'nonstop-animation-enabled';
 
 function shuffleInPlace<T>(arr: T[]): void {
   for (let i = arr.length - 1; i > 0; i--) {
@@ -370,13 +375,20 @@ function nonStopSkipNext() {
   player.playNext();
 }
 
+function toggleNonStopAnimation() {
+  nonStopAnimationEnabled.value = !nonStopAnimationEnabled.value;
+  localStorage.setItem(NONSTOP_ANIMATION_STORAGE_KEY, String(nonStopAnimationEnabled.value));
+}
+
 async function likeTrack(trackId: string) {
   if (!auth.user) {
     return;
   }
   try {
     const res = await api.post<{ likes: number; likedByMe: boolean }>(`/tracks/${trackId}/like`);
-    const { likes, likedByMe } = res.data;
+    const likes = res.data.likes;
+    const likedByMe = Boolean(res.data.likedByMe);
+    trackFavorites.setLiked(trackId, likedByMe);
     const patch = (list: TrackListItem[]) =>
       list.map(t => (t.id === trackId ? { ...t, likes, likedByMe } : t));
     tracks.value = patch(tracks.value);
@@ -607,6 +619,10 @@ function changeVolume(event: Event) {
 }
 
 onMounted(() => {
+  const savedAnimationPref = localStorage.getItem(NONSTOP_ANIMATION_STORAGE_KEY);
+  if (savedAnimationPref === 'false') {
+    nonStopAnimationEnabled.value = false;
+  }
   page.value = 0;
   hasMore.value = true;
   loadTracks();
@@ -711,13 +727,13 @@ onBeforeUnmount(() => {
             ❤
           </button>
           <div class="popular-album-image" v-if="album.coverUrl">
-            <img :src="`http://localhost:8080${album.coverUrl}`" alt="cover" />
+            <img :src="assetUrl(album.coverUrl)" alt="cover" />
           </div>
           <div class="popular-album-overlay">
             <div class="popular-album-title">{{ album.name }}</div>
             <div class="popular-album-meta">
               {{ album.ownerUsername }}
-              <span v-if="album.playCount > 0"> · {{ album.playCount }} прослушиваний</span>
+              <span v-if="album.playCount > 0"> ·  прослушиваний {{ album.playCount }}</span>
             </div>
           </div>
         </div>
@@ -727,10 +743,10 @@ onBeforeUnmount(() => {
     <div class="home-feed-row">
     <section class="card tracks-card" :class="{ 'nonstop-wave-card': homeTab === 'nonstop' }">
       <template v-if="homeTab === 'nonstop'">
-        <div class="nonstop-hero" aria-hidden="true">
+        <div class="nonstop-hero" :class="{ 'nonstop-hero--animated': nonStopAnimationEnabled }" aria-hidden="true">
           <div class="nonstop-hero-inner">
             <div class="nonstop-hero-kicker">Радио</div>
-            <h2 class="nonstop-hero-title">Нон-стоп волна</h2>
+            <h2 class="nonstop-hero-title">Нон-стоп</h2>
             <p class="nonstop-hero-lead">
               Показываем, что играет сейчас и что будет дальше; треки идут подряд без остановки, очередь подгружается сама.
             </p>
@@ -751,35 +767,22 @@ onBeforeUnmount(() => {
           </svg>
         </div>
 
-        <div class="nonstop-how-grid">
-          <div class="nonstop-how-card">
-            <div class="nonstop-how-icon" aria-hidden="true">◎</div>
-            <div class="nonstop-how-title">Под тебя</div>
-            <p class="nonstop-how-text muted">Смесь популярного, свежих загрузок и артистов из подписок.</p>
-          </div>
-          <div class="nonstop-how-card">
-            <div class="nonstop-how-icon" aria-hidden="true">✦</div>
-            <div class="nonstop-how-title">Промо в потоке</div>
-            <p class="nonstop-how-text muted">
-              Иногда в ленте встречаются продвигаемые треки — с меткой «Промо». Статистику по ним видно в «Мои релизы».
-            </p>
-          </div>
-          <div class="nonstop-how-card">
-            <div class="nonstop-how-icon" aria-hidden="true">∞</div>
-            <div class="nonstop-how-title">Без пауз</div>
-            <p class="nonstop-how-text muted">По окончании трека включается следующий автоматически. Список очереди на экране не показываем — только «далее».</p>
-          </div>
-        </div>
-
         <div class="nonstop-toolbar">
           <div class="nonstop-actions">
             <button
               type="button"
-              class="primary-button"
+              class="nonstop-listen-btn"
               :disabled="nonStopLoading"
               @click="startNonStopWave"
             >
-              {{ nonStopLoading && !nonStopSlots.length ? 'Собираем…' : nonStopStarted ? 'Новая волна' : 'Слушать волну' }}
+              {{ nonStopLoading && !nonStopSlots.length ? 'Настраиваем волну…' : nonStopStarted ? 'Обновить волну' : 'Слушать волну' }}
+            </button>
+            <button
+              type="button"
+              class="nonstop-animation-toggle"
+              @click="toggleNonStopAnimation"
+            >
+              {{ nonStopAnimationEnabled ? 'Выключить анимацию' : 'Включить анимацию' }}
             </button>
             <button
               v-if="nonStopStarted && player.queue.length"
@@ -806,21 +809,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div v-else-if="!nonStopSlots.length" class="nonstop-empty-panel">
-          <p class="nonstop-empty-hint">
-            Нажми «Слушать волну» — соберём очередь. Войди в аккаунт, чтобы лайки и реакции по промо учитывались в статистике.
-          </p>
-          <div class="nonstop-empty-actions">
-            <button type="button" class="secondary-button" @click="router.push('/my-releases')">
-              Промо для своего трека
-            </button>
-            <button type="button" class="secondary-button" @click="setHomeTab('popular')">
-              Сначала лента «Популярное»
-            </button>
-          </div>
-        </div>
-
-        <div v-else class="nonstop-radio-stack">
+        <div v-else-if="nonStopSlots.length" class="nonstop-radio-stack">
           <p
             v-if="nonStopPromoInWave > 0 && nonStopStarted"
             class="muted nonstop-mini-promo-hint"
@@ -837,7 +826,7 @@ onBeforeUnmount(() => {
               class="nonstop-now-cover"
               @click="playNonStopTrack(nonStopCurrentSlot.track.id)"
             >
-              <img :src="`http://localhost:8080${nonStopCurrentSlot.track.coverUrl}`" alt="" />
+              <img :src="assetUrl(nonStopCurrentSlot.track.coverUrl)" alt="" />
             </div>
             <div
               v-else
@@ -900,7 +889,7 @@ onBeforeUnmount(() => {
               v-if="nonStopNextSlot.track.coverUrl"
               class="nonstop-next-thumb"
             >
-              <img :src="`http://localhost:8080${nonStopNextSlot.track.coverUrl}`" alt="" />
+              <img :src="assetUrl(nonStopNextSlot.track.coverUrl)" alt="" />
             </div>
             <div v-else class="nonstop-next-thumb nonstop-next-thumb-placeholder">♪</div>
             <div class="nonstop-next-body">
@@ -928,9 +917,9 @@ onBeforeUnmount(() => {
       <div class="card-header">
         <div>
           <div class="card-title">Лента треков</div>
-          <div class="muted">Слушай загруженные треки и ставь лайки</div>
+          <!-- <div class="muted">Слушай загруженные треки и ставь лайки</div> -->
         </div>
-        <span class="pill">{{ tracks.length }} трек(ов)</span>
+        <!-- <span class="pill">{{ tracks.length }} трек(ов)</span> -->
       </div>
 
       <div v-if="homeTab === 'following' && !auth.user" class="muted">
@@ -948,7 +937,7 @@ onBeforeUnmount(() => {
           :class="{ active: player.currentTrackId === track.id }"
         >
           <div v-if="track.coverUrl" class="track-post-cover" @click="playTrack(track.id)">
-            <img :src="`http://localhost:8080${track.coverUrl}`" alt="cover" />
+            <img :src="assetUrl(track.coverUrl)" alt="cover" />
           </div>
           <div class="track-row-body-feed">
             <div class="track-row-left">
@@ -1156,7 +1145,7 @@ onBeforeUnmount(() => {
                 <div class="avatar-wrapper" style="width: 40px; height: 40px">
                   <img
                     v-if="f.avatarUrl"
-                    :src="`http://localhost:8080/api/users/${f.id}/avatar`"
+                    :src="assetUrl(`/api/users/${f.id}/avatar`)"
                     alt="avatar"
                     class="avatar-image"
                   />

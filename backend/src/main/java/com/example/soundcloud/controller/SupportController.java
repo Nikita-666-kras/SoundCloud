@@ -16,7 +16,6 @@ import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 
 @RestController
 @RequestMapping("/api/support")
-@CrossOrigin(origins = "http://localhost:5173", allowCredentials = "true")
 public class SupportController {
 
     private final SupportService supportService;

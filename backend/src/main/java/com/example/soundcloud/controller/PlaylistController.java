@@ -20,7 +20,6 @@ import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 
 @RestController
 @RequestMapping("/api/playlists")
-@CrossOrigin(origins = "http://localhost:5173", allowCredentials = "true")
 public class PlaylistController {
 
     private final PlaylistService playlistService;
