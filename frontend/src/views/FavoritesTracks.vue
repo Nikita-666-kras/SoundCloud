@@ -121,6 +121,14 @@ function goToArtist(artistId: string) {
                 <span v-if="track.likes > 0" class="track-action-count">{{ track.likes }}</span>
               </button>
               <button
+                type="button"
+                class="track-action-icon-btn"
+                aria-label="Комментарии"
+                @click.stop="trackActions.toggleComments(track.id)"
+              >
+                <svg class="track-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              </button>
+              <button
                 v-if="auth.user"
                 type="button"
                 class="track-action-icon-btn"
@@ -131,6 +139,52 @@ function goToArtist(artistId: string) {
               </button>
             </div>
           </div>
+
+          <div
+            v-if="trackActions.commentsOpen[track.id]"
+            class="comments-block"
+            style="margin-top: 6px"
+          >
+            <div v-if="trackActions.commentsLoading[track.id]" class="muted">Загружаем комментарии...</div>
+            <div v-else>
+              <div
+                v-if="!(trackActions.commentsByTrack[track.id] && trackActions.commentsByTrack[track.id].length)"
+                class="muted"
+              >
+                Пока нет комментариев. Будь первым.
+              </div>
+              <div v-else class="comments-list">
+                <div
+                  v-for="comment in trackActions.commentsByTrack[track.id]"
+                  :key="comment.id"
+                  class="comment-row"
+                >
+                  <div class="comment-author">{{ comment.username }}</div>
+                  <div class="comment-text">{{ comment.text }}</div>
+                </div>
+              </div>
+            </div>
+            <div v-if="auth.user" class="input-group" style="margin-top: 6px">
+              <textarea
+                v-model="trackActions.newCommentText[track.id]"
+                class="input-control-textarea"
+                rows="2"
+                placeholder="Напиши комментарий"
+              />
+              <button
+                class="secondary-button"
+                type="button"
+                style="align-self: flex-end; margin-top: 4px"
+                @click="trackActions.submitComment(track.id)"
+              >
+                Отправить
+              </button>
+            </div>
+            <div v-else class="muted" style="margin-top: 4px">
+              Чтобы комментировать, войди или зарегистрируйся.
+            </div>
+          </div>
+
           <div
             v-if="auth.user && trackActions.reportOpen[track.id]"
             class="comments-block"

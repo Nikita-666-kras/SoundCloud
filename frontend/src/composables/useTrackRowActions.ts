@@ -19,6 +19,14 @@ export interface PlaylistSummary {
   trackCount: number;
 }
 
+export interface TrackComment {
+  id: string;
+  userId: string;
+  username: string;
+  text: string;
+  createdAt: string;
+}
+
 export interface UseTrackRowActionsOptions {
   /** Убрать трек из списка при снятии лайка (избранное) */
   removeOnUnlike?: boolean;
@@ -38,6 +46,11 @@ export function useTrackRowActions(
   const reportReason = ref<Record<string, string>>({});
   const reportText = ref<Record<string, string>>({});
   const reportSending = ref<Record<string, boolean>>({});
+
+  const commentsByTrack = ref<Record<string, TrackComment[]>>({});
+  const commentsOpen = ref<Record<string, boolean>>({});
+  const commentsLoading = ref<Record<string, boolean>>({});
+  const newCommentText = ref<Record<string, string>>({});
 
   const repostDialogTrackId = ref<string | null>(null);
   const repostFriends = ref<FriendSummary[]>([]);
@@ -73,6 +86,43 @@ export function useTrackRowActions(
       if (player.currentTrackId === trackId) {
         player.patchTrackInQueue(trackId, { likes, likedByMe });
       }
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  async function loadComments(trackId: string) {
+    if (commentsLoading.value[trackId]) return;
+    commentsLoading.value[trackId] = true;
+    try {
+      const res = await api.get<TrackComment[]>(`/tracks/${trackId}/comments`);
+      commentsByTrack.value[trackId] = res.data;
+    } catch (e) {
+      console.error(e);
+    } finally {
+      commentsLoading.value[trackId] = false;
+    }
+  }
+
+  async function toggleComments(trackId: string) {
+    const currentlyOpen = !!commentsOpen.value[trackId];
+    commentsOpen.value[trackId] = !currentlyOpen;
+    if (!currentlyOpen && !commentsByTrack.value[trackId]) {
+      await loadComments(trackId);
+    }
+  }
+
+  async function submitComment(trackId: string) {
+    if (!auth.user) return;
+    const text = (newCommentText.value[trackId] || '').trim();
+    if (!text) return;
+    try {
+      const params = new URLSearchParams();
+      params.append('text', text);
+      const res = await api.post<TrackComment>(`/tracks/${trackId}/comments?${params.toString()}`);
+      const list = commentsByTrack.value[trackId] || [];
+      commentsByTrack.value[trackId] = [...list, res.data];
+      newCommentText.value[trackId] = '';
     } catch (e) {
       console.error(e);
     }
@@ -240,6 +290,10 @@ export function useTrackRowActions(
     reportReason,
     reportText,
     reportSending,
+    commentsByTrack,
+    commentsOpen,
+    commentsLoading,
+    newCommentText,
     repostDialogTrackId,
     repostFriends,
     repostLoading,
@@ -254,6 +308,8 @@ export function useTrackRowActions(
     addTrackToPlaylistLoading,
     createPlaylistLoading,
     likeTrack,
+    toggleComments,
+    submitComment,
     toggleReport,
     submitReport,
     openTrackActionsModal,
