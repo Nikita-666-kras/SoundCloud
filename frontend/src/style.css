@@ -460,11 +460,10 @@ body.dark-theme .nonstop-mini-promo-hint {
 .nonstop-now-icon-row {
   display: flex;
   flex-direction: row;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  max-width: 120px;
+  gap: 6px;
 }
 
 .nonstop-now-like {
@@ -834,6 +833,117 @@ body.dark-theme .nonstop-animation-toggle {
 body.dark-theme .nonstop-now-card {
   border-color: rgba(56, 189, 248, 0.25);
   background: rgba(30, 58, 138, 0.2);
+}
+
+/* Нон-стоп «Сейчас» / «Следующий»: на телефоне — ровная панель действий, не «лесенкой» */
+@media (max-width: 640px) {
+  .nonstop-now-card {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .nonstop-now-cover,
+  .nonstop-now-cover-placeholder {
+    width: 52px;
+    height: 52px;
+  }
+
+  .nonstop-now-body {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .nonstop-now-side-actions {
+    flex-basis: 100%;
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    padding-top: 12px;
+    margin-top: 0;
+    border-top: 1px solid rgba(148, 163, 184, 0.28);
+  }
+
+  body.dark-theme .nonstop-now-side-actions {
+    border-top-color: rgba(148, 163, 184, 0.2);
+  }
+
+  .nonstop-now-icon-row {
+    flex: 1;
+    min-width: 0;
+    justify-content: flex-start;
+    gap: 8px;
+  }
+
+  .nonstop-now-icon-row .track-action-icon-btn {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .nonstop-now-play {
+    flex-shrink: 0;
+  }
+
+  .nonstop-now-card .nonstop-now-play.track-action-play {
+    width: 48px;
+    height: 48px;
+    min-width: 48px;
+    min-height: 48px;
+    max-width: 48px;
+    max-height: 48px;
+  }
+
+  .nonstop-next-card {
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    align-items: start;
+    column-gap: 12px;
+    row-gap: 0;
+    padding: 12px;
+  }
+
+  .nonstop-next-thumb,
+  .nonstop-next-thumb-placeholder {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .nonstop-next-body {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
+  }
+
+  .nonstop-next-actions {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    flex-direction: row;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(148, 163, 184, 0.22);
+  }
+
+  body.dark-theme .nonstop-next-actions {
+    border-top-color: rgba(148, 163, 184, 0.14);
+  }
+
+  .nonstop-next-action-btn {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
 }
 
 .track-title-row {
