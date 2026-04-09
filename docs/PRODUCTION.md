@@ -4,8 +4,8 @@
 
 1. DNS: A-записи `@` и `www` на IP сервера (у тебя уже настроено).
 2. На сервере: `docker compose up -d` из корня репозитория, файл `.env` из `.env.example` (пароль БД и `JWT_SECRET`).
-3. Nginx + TLS: пример [`deploy/nginx-slapshous.conf.example`](../deploy/nginx-slapshous.conf.example) → `sites-available`, затем `certbot --nginx -d slapshous.ru -d www.slapshous.ru`.
-4. Фронт в Docker слушает **127.0.0.1:5173**; наружу только 80/443 через системный Nginx.
+3. Nginx + TLS: пример [`deploy/nginx-slapshous.conf.example`](../deploy/nginx-slapshous.conf.example) → `sites-available`, затем `certbot --nginx -d slapshous.ru -d www.slapshous.ru`. Проверка только по IP (без TLS): [`deploy/nginx-by-ip.conf.example`](../deploy/nginx-by-ip.conf.example).
+4. Фронт в Docker слушает **127.0.0.1:5173**; наружу только 80/443 через системный Nginx. При **ufw**: `sudo ufw allow 80,443/tcp`.
 
 ## Уже в репозитории
 
