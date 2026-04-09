@@ -11,7 +11,8 @@ COPY . .
 ARG VITE_APP_ORIGIN=
 ENV VITE_APP_ORIGIN=$VITE_APP_ORIGIN
 
-RUN npm run build
+# Обход «vite: Permission denied» (битый .bin после COPY или CRLF): без shell-обёртки
+RUN node ./node_modules/vite/bin/vite.js build
 
 FROM nginx:1.27-alpine
 
