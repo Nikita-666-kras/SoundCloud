@@ -19,6 +19,16 @@ export interface TrackListItem {
 
 const VOLUME_KEY = 'slapshous_volume';
 
+/** iOS / iPadOS Safari не применяют изменения audio.volume — только системные кнопки. Обход: MediaElementSource → GainNode. */
+function platformIgnoresMediaElementVolume(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent;
+  if (/iPhone|iPod/i.test(ua)) return true;
+  if (/iPad/i.test(ua)) return true;
+  if (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) return true;
+  return false;
+}
+
 type PlaybackMode = 'queue' | 'shuffle' | 'repeat';
 
 export type NonStopFeedbackEvent = 'SKIP' | 'FULL_LISTEN';
@@ -30,6 +40,83 @@ export type NonStopReporter = (
 ) => void | Promise<void>;
 
 export const usePlayerStore = defineStore('player', () => {
+  let webAudioCtx: AudioContext | null = null;
+  let webAudioGain: GainNode | null = null;
+  let webAudioSource: MediaElementAudioSourceNode | null = null;
+  let webAudioForElement: HTMLAudioElement | null = null;
+
+  function tearDownWebAudioVolume() {
+    try {
+      webAudioSource?.disconnect();
+    } catch {
+      /* ignore */
+    }
+    webAudioSource = null;
+    try {
+      webAudioGain?.disconnect();
+    } catch {
+      /* ignore */
+    }
+    webAudioGain = null;
+    if (webAudioCtx && webAudioCtx.state !== 'closed') {
+      void webAudioCtx.close();
+    }
+    webAudioCtx = null;
+    webAudioForElement = null;
+  }
+
+  function getAudioContextCtor(): (typeof AudioContext) | null {
+    if (typeof window === 'undefined') return null;
+    if (typeof AudioContext !== 'undefined') return AudioContext;
+    const w = window as unknown as { webkitAudioContext?: typeof AudioContext };
+    return w.webkitAudioContext ?? null;
+  }
+
+  /** @returns true если громкость идёт через GainNode */
+  function ensureWebAudioVolumePath(audio: HTMLAudioElement): boolean {
+    if (!platformIgnoresMediaElementVolume()) return false;
+    if (webAudioForElement === audio && webAudioGain && webAudioCtx) {
+      return true;
+    }
+    tearDownWebAudioVolume();
+    const AC = getAudioContextCtor();
+    if (!AC) return false;
+    try {
+      webAudioCtx = new AC();
+      webAudioSource = webAudioCtx.createMediaElementSource(audio);
+      webAudioGain = webAudioCtx.createGain();
+      webAudioGain.gain.value = volume.value;
+      webAudioSource.connect(webAudioGain).connect(webAudioCtx.destination);
+      webAudioForElement = audio;
+      audio.volume = 1;
+      return true;
+    } catch (e) {
+      console.warn('[player] Web Audio volume path failed', e);
+      tearDownWebAudioVolume();
+      return false;
+    }
+  }
+
+  async function resumeWebAudioIfSuspended() {
+    if (webAudioCtx?.state === 'suspended') {
+      try {
+        await webAudioCtx.resume();
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  function applyVolumeToAudioOutput() {
+    const audio = audioElement.value;
+    if (!audio) return;
+    if (webAudioForElement === audio && webAudioGain) {
+      webAudioGain.gain.value = volume.value;
+    } else {
+      audio.volume = volume.value;
+    }
+  }
+
   const queue = ref<TrackListItem[]>([]);
   const currentTrackId = ref<string | null>(null);
   const audioElement = ref<HTMLAudioElement | null>(null);
@@ -69,9 +156,16 @@ export const usePlayerStore = defineStore('player', () => {
   );
 
   function setAudioElement(el: HTMLAudioElement | null) {
+    if (!el) {
+      tearDownWebAudioVolume();
+      audioElement.value = null;
+      return;
+    }
     audioElement.value = el;
-    if (audioElement.value) {
-      audioElement.value.volume = volume.value;
+    if (ensureWebAudioVolumePath(el)) {
+      webAudioGain!.gain.value = volume.value;
+    } else {
+      el.volume = volume.value;
     }
   }
 
@@ -92,7 +186,12 @@ export const usePlayerStore = defineStore('player', () => {
     if (!audioElement.value) return;
 
     const audio = audioElement.value;
-    audio.volume = volume.value;
+    if (ensureWebAudioVolumePath(audio)) {
+      webAudioGain!.gain.value = volume.value;
+      void resumeWebAudioIfSuspended();
+    } else {
+      audio.volume = volume.value;
+    }
     audio.src = `${getApiBaseUrl()}/tracks/${trackId}/stream`;
     audio
       .play()
@@ -111,6 +210,7 @@ export const usePlayerStore = defineStore('player', () => {
     const audio = audioElement.value;
 
     if (audio.paused) {
+      void resumeWebAudioIfSuspended();
       audio
         .play()
         .then(() => {
@@ -272,7 +372,7 @@ export const usePlayerStore = defineStore('player', () => {
     const target = event.target as HTMLInputElement;
     const value = Number(target.value);
     volume.value = value;
-    audioElement.value.volume = value;
+    applyVolumeToAudioOutput();
     localStorage.setItem(VOLUME_KEY, String(value));
   }
 

@@ -499,17 +499,6 @@ watch(
       </div>
 
       <div class="header-right">
-        <button
-          type="button"
-          class="burger-btn header-mobile-only"
-          aria-label="Меню"
-          @click="mobileMenuOpen = true"
-        >
-          <span class="burger-line" />
-          <span class="burger-line" />
-          <span class="burger-line" />
-        </button>
-        <div class="auth-header-actions header-desktop-only">
         <div v-if="auth.user" class="notif-wrapper">
           <button
             type="button"
@@ -558,8 +547,18 @@ watch(
             </div>
           </div>
         </div>
-
-        <div v-if="auth.user" class="user-menu header-desktop-only" @click="toggleUserMenu">
+        <button
+          type="button"
+          class="burger-btn header-mobile-only"
+          aria-label="Меню"
+          @click="mobileMenuOpen = true"
+        >
+          <span class="burger-line" />
+          <span class="burger-line" />
+          <span class="burger-line" />
+        </button>
+        <div class="auth-header-actions header-desktop-only">
+        <div v-if="auth.user" class="user-menu" @click="toggleUserMenu">
           <div class="avatar-wrapper">
             <img
               :src="assetUrl(`/api/users/${auth.user.id}/avatar`)"
@@ -734,8 +733,8 @@ watch(
               <button type="button" class="burger-nav-item" @click="logout">Выйти</button>
             </div>
             <div v-else class="burger-auth">
-              <button type="button" class="primary-button burger-upload-btn" @click="navTo('/login')">Вход</button>
-              <button type="button" class="secondary-button" @click="navTo('/register')">Регистрация</button>
+              <button type="button" class="primary-button burger-upload-btn full-width" @click="navTo('/login')">Вход</button>
+              <button type="button" class="secondary-button burger-upload-btn full-width" @click="navTo('/register')">Регистрация</button>
             </div>
             <button class="primary-button burger-upload-btn full-width" :disabled="isUploadDisabled" @click="navTo('/upload')">
               Выложить трек

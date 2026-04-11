@@ -2751,7 +2751,8 @@ body.dark-theme .friends-search-icon {
 
 .player-bar-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  /* Правая колонка — по контенту (иконки), не 1fr: иначе на SE у текста и обложки остаётся половина ширины вместе с «пустым» запасом справа. */
+  grid-template-columns: minmax(0, 1fr) auto max-content;
   align-items: center;
   column-gap: 12px;
   padding: 0 12px 0 16px;
@@ -2796,6 +2797,7 @@ body.dark-theme .friends-search-icon {
 .player-bar-info {
   min-width: 0;
   flex: 1;
+  overflow: hidden;
 }
 
 /* Лайк в мини-плеере (десктоп — у громкости; мобильный — в нижнем ряду) */
@@ -3233,6 +3235,26 @@ body:not(.dark-theme) .player-full-overlay {
 body:not(.dark-theme) .player-full {
   background: linear-gradient(180deg, #f5f5f5 0%, #e8e8e8 100%);
   box-shadow: 0 24px 48px rgba(0, 0, 0, 0.2);
+}
+
+/* Светлая карточка: транспорт — тёмные иконки / тёмная кнопка play */
+body:not(.dark-theme) .player-full-controls > .player-bar-btn:not(.player-bar-btn-play) {
+  color: #0f172a;
+}
+
+body:not(.dark-theme) .player-full-controls > .player-bar-btn:not(.player-bar-btn-play):hover {
+  color: #020617;
+  background: rgba(15, 23, 42, 0.08);
+}
+
+body:not(.dark-theme) .player-full-controls .player-bar-btn-play {
+  background: #0f172a;
+  color: #f8fafc;
+}
+
+body:not(.dark-theme) .player-full-controls .player-bar-btn-play:hover {
+  color: #ffffff;
+  background: #1e293b;
 }
 
 .player-full-close {
@@ -4497,9 +4519,45 @@ body.dark-theme .favorites-playlist-item:hover {
   .burger-auth {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 5px;
     padding: 8px 0 12px;
     border-top: 1px solid rgba(148, 163, 184, 0.2);
+  }
+
+  .burger-auth > .burger-upload-btn.full-width {
+    margin-top: 4px;
+    margin-bottom: 4px;
+  }
+
+  .burger-auth > .burger-upload-btn.full-width:first-child {
+    margin-top: 8px;
+  }
+
+  .burger-auth > .burger-upload-btn.full-width:last-child {
+    margin-bottom: 8px;
+  }
+
+  .burger-auth > .secondary-button.burger-upload-btn.full-width {
+    background: #ffffff;
+    border: 1px solid rgba(148, 163, 184, 0.75);
+    color: var(--text-primary);
+    box-shadow: none;
+    font-weight: 600;
+  }
+
+  .burger-auth > .secondary-button.burger-upload-btn.full-width:active {
+    transform: scale(0.98);
+    background: rgba(243, 244, 246, 0.95);
+  }
+
+  body.dark-theme .burger-auth > .secondary-button.burger-upload-btn.full-width {
+    background: rgba(30, 41, 59, 0.95);
+    border-color: rgba(100, 116, 139, 0.85);
+    color: #f1f5f9;
+  }
+
+  body.dark-theme .burger-auth > .secondary-button.burger-upload-btn.full-width:active {
+    background: rgba(51, 65, 85, 0.95);
   }
 
   .burger-profile-btn {
@@ -5115,6 +5173,17 @@ body.dark-theme .favorites-playlist-item:hover {
     transform: scale(0.98);
   }
 
+  .header-right .notif-button {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
   .notif-button,
   .mobile-search-btn,
   .burger-btn {
@@ -5178,6 +5247,21 @@ body.dark-theme .favorites-playlist-item:hover {
 
   .player-bar-row {
     min-height: 56px;
+    column-gap: 4px;
+  }
+
+  .player-bar-left {
+    gap: 6px;
+  }
+
+  .player-bar-center {
+    gap: 4px;
+  }
+
+  .player-bar-btn {
+    width: 28px;
+    height: 28px;
+    font-size: 15px;
   }
 
   .player-bar-cover {
@@ -5186,15 +5270,44 @@ body.dark-theme .favorites-playlist-item:hover {
   }
 
   .player-bar-btn-play {
-    width: 36px;
-    height: 36px;
-    min-width: 36px;
-    min-height: 36px;
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    min-height: 34px;
   }
 
   .player-bar-btn-play .track-action-play-svg {
-    width: 16px;
-    height: 16px;
+    width: 15px;
+    height: 15px;
+  }
+
+  .player-bar-right {
+    gap: 2px;
+  }
+
+  .player-bar-right-mobile-cluster .player-bar-volume-icon-btn {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    min-height: 32px;
+  }
+
+  .player-bar .player-like-in-bar.track-action-icon-btn {
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
+    min-height: 30px;
+  }
+
+  .player-bar-expand {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+  }
+
+  .player-bar-expand svg {
+    width: 18px;
+    height: 18px;
   }
 
   .home-layout {
