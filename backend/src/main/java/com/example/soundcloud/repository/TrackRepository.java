@@ -32,5 +32,8 @@ public interface TrackRepository extends JpaRepository<Track, UUID> {
     Page<Track> search(@Param("q") String q, Pageable pageable);
 
     List<Track> findByAlbumContainingIgnoreCaseAndOwner_PrivateAccountFalse(String albumPart);
+
+    @Query("SELECT COALESCE(SUM(t.playCount), 0) FROM Track t")
+    long sumPlayCount();
 }
 

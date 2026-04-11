@@ -2,14 +2,15 @@ package com.example.soundcloud.controller;
 
 import com.example.soundcloud.model.TrackReport;
 import com.example.soundcloud.model.User;
+import com.example.soundcloud.dto.AdminDtos;
 import com.example.soundcloud.dto.SupportDtos;
+import com.example.soundcloud.service.AdminStatsService;
 import com.example.soundcloud.service.SupportService;
 import com.example.soundcloud.service.TrackReportService;
 import com.example.soundcloud.service.UserService;
 import com.example.soundcloud.service.TrackService;
 import com.example.soundcloud.repository.TrackRepository;
 import com.example.soundcloud.config.SecurityUtils;
-import com.example.soundcloud.dto.TrackDtos;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -31,22 +32,33 @@ public class AdminController {
     private final TrackRepository trackRepository;
     private final TrackService trackService;
     private final SupportService supportService;
+    private final AdminStatsService adminStatsService;
 
     public AdminController(UserService userService,
                            TrackReportService reportService,
                            TrackRepository trackRepository,
                            TrackService trackService,
-                           SupportService supportService) {
+                           SupportService supportService,
+                           AdminStatsService adminStatsService) {
         this.userService = userService;
         this.reportService = reportService;
         this.trackRepository = trackRepository;
         this.trackService = trackService;
         this.supportService = supportService;
+        this.adminStatsService = adminStatsService;
     }
 
     private Optional<User> requireAdmin() {
         return SecurityUtils.getCurrentUser(userService)
                 .filter(User::isAdmin);
+    }
+
+    @GetMapping("/stats")
+    public ResponseEntity<AdminDtos.StatsResponse> stats() {
+        if (requireAdmin().isEmpty()) {
+            return ResponseEntity.status(FORBIDDEN.value()).build();
+        }
+        return ResponseEntity.ok(adminStatsService.getStats());
     }
 
     public record TrackReportResponse(

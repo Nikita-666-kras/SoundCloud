@@ -9,6 +9,8 @@ import java.util.UUID;
 
 public interface TrackReportRepository extends JpaRepository<TrackReport, UUID> {
 
+    long countByResolved(boolean resolved);
+
     List<TrackReport> findByResolvedFalseOrderByCreatedAtDesc();
 
     List<TrackReport> findByTrack(Track track);

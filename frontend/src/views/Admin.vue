@@ -29,6 +29,18 @@ interface SupportMessage {
   createdAt: string;
 }
 
+interface AdminStats {
+  users: number;
+  tracks: number;
+  totalPlays: number;
+  openReports: number;
+  totalReports: number;
+  trackLikes: number;
+  trackComments: number;
+  playlists: number;
+  supportMessages: number;
+}
+
 const auth = useAuthStore();
 const isAdmin = computed(() => !!auth.user?.admin);
 
@@ -44,6 +56,32 @@ const threadMessages = ref<SupportMessage[]>([]);
 const threadLoading = ref(false);
 const replyText = ref('');
 const replySending = ref(false);
+
+const stats = ref<AdminStats | null>(null);
+const statsLoading = ref(false);
+const statsError = ref('');
+
+const nf = new Intl.NumberFormat('ru-RU');
+
+function formatStat(n: number) {
+  return nf.format(n);
+}
+
+async function loadStats() {
+  if (!auth.user) return;
+  statsLoading.value = true;
+  statsError.value = '';
+  try {
+    const res = await api.get<AdminStats>('/admin/stats');
+    stats.value = res.data;
+  } catch (e) {
+    console.error(e);
+    statsError.value = 'Не удалось загрузить статистику.';
+    stats.value = null;
+  } finally {
+    statsLoading.value = false;
+  }
+}
 
 async function loadReports() {
   if (!auth.user) return;
@@ -120,6 +158,7 @@ async function resolveReport(id: string) {
   try {
     await api.post(`/admin/reports/${id}/resolve`);
     reports.value = reports.value.filter((r) => r.id !== id);
+    void loadStats();
   } catch (e) {
     console.error(e);
     errorMessage.value = 'Не удалось закрыть жалобу.';
@@ -140,6 +179,7 @@ watch(selectedUserId, (id) => {
 
 onMounted(() => {
   if (isAdmin.value) {
+    loadStats();
     loadReports();
     loadSupportThreads();
   }
@@ -148,6 +188,58 @@ onMounted(() => {
 
 <template>
   <div class="layout-single admin-page">
+    <section v-if="auth.user && isAdmin" class="card admin-stats-card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Статистика</div>
+          <div class="muted">Сводка по базе (только для администратора)</div>
+        </div>
+        <button type="button" class="secondary-button" :disabled="statsLoading" @click="loadStats">
+          {{ statsLoading ? 'Обновляем…' : 'Обновить' }}
+        </button>
+      </div>
+      <p v-if="statsError" class="muted admin-support-banner-error">{{ statsError }}</p>
+      <div v-if="statsLoading && !stats" class="muted">Загружаем статистику...</div>
+      <div v-else-if="stats" class="admin-stats-grid">
+        <div class="admin-stat-tile">
+          <div class="admin-stat-value">{{ formatStat(stats.users) }}</div>
+          <div class="admin-stat-label muted">Пользователи</div>
+        </div>
+        <div class="admin-stat-tile">
+          <div class="admin-stat-value">{{ formatStat(stats.tracks) }}</div>
+          <div class="admin-stat-label muted">Треки</div>
+        </div>
+        <div class="admin-stat-tile">
+          <div class="admin-stat-value">{{ formatStat(stats.totalPlays) }}</div>
+          <div class="admin-stat-label muted">Прослушивания (сумма)</div>
+        </div>
+        <div class="admin-stat-tile">
+          <div class="admin-stat-value">{{ formatStat(stats.trackLikes) }}</div>
+          <div class="admin-stat-label muted">Лайки треков</div>
+        </div>
+        <div class="admin-stat-tile">
+          <div class="admin-stat-value">{{ formatStat(stats.trackComments) }}</div>
+          <div class="admin-stat-label muted">Комментарии</div>
+        </div>
+        <div class="admin-stat-tile">
+          <div class="admin-stat-value">{{ formatStat(stats.playlists) }}</div>
+          <div class="admin-stat-label muted">Плейлисты</div>
+        </div>
+        <div class="admin-stat-tile">
+          <div class="admin-stat-value">{{ formatStat(stats.openReports) }}</div>
+          <div class="admin-stat-label muted">Открытые жалобы</div>
+        </div>
+        <div class="admin-stat-tile">
+          <div class="admin-stat-value">{{ formatStat(stats.totalReports) }}</div>
+          <div class="admin-stat-label muted">Жалобы всего</div>
+        </div>
+        <div class="admin-stat-tile">
+          <div class="admin-stat-value">{{ formatStat(stats.supportMessages) }}</div>
+          <div class="admin-stat-label muted">Сообщения поддержки</div>
+        </div>
+      </div>
+    </section>
+
     <section class="card">
       <div class="card-header">
         <div>
