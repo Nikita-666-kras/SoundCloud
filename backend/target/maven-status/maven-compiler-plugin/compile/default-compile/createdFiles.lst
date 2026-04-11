@@ -78,4 +78,5 @@ com/example/soundcloud/config/SecurityUtils.class
 com/example/soundcloud/repository/RefreshTokenRepository.class
 com/example/soundcloud/model/FriendRequest.class
 com/example/soundcloud/service/FriendService.class
+com/example/soundcloud/service/OnlinePresenceService.class
 com/example/soundcloud/controller/PlaylistController.class

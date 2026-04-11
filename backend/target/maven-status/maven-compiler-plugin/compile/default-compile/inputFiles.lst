@@ -57,6 +57,7 @@
 /app/src/main/java/com/example/soundcloud/service/JwtService.java
 /app/src/main/java/com/example/soundcloud/service/NonStopService.java
 /app/src/main/java/com/example/soundcloud/service/NotificationService.java
+/app/src/main/java/com/example/soundcloud/service/OnlinePresenceService.java
 /app/src/main/java/com/example/soundcloud/service/PlaylistService.java
 /app/src/main/java/com/example/soundcloud/service/PromotionService.java
 /app/src/main/java/com/example/soundcloud/service/SupportService.java

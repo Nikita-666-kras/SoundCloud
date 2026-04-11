@@ -2,6 +2,7 @@ package com.example.soundcloud.security;
 
 import com.example.soundcloud.config.CurrentUser;
 import com.example.soundcloud.service.JwtService;
+import com.example.soundcloud.service.OnlinePresenceService;
 import com.example.soundcloud.service.UserService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -26,10 +27,12 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
     private final UserService userService;
+    private final OnlinePresenceService onlinePresenceService;
 
-    public JwtAuthFilter(JwtService jwtService, UserService userService) {
+    public JwtAuthFilter(JwtService jwtService, UserService userService, OnlinePresenceService onlinePresenceService) {
         this.jwtService = jwtService;
         this.userService = userService;
+        this.onlinePresenceService = onlinePresenceService;
     }
 
     @Override
@@ -40,6 +43,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             if (token != null && !jwtService.isRefreshToken(token)) {
                 UUID userId = jwtService.parseUserId(token);
                 if (userId != null && userService.findById(userId).isPresent()) {
+                    onlinePresenceService.markPresent(userId);
                     CurrentUser currentUser = new CurrentUser(userId);
                     UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
                             currentUser, null, Collections.emptyList());

@@ -1075,6 +1075,31 @@ body.dark-theme .admin-stat-tile {
   border-color: rgba(51, 65, 85, 0.55);
 }
 
+.admin-stat-tile--server {
+  grid-column: span 2;
+  text-align: left;
+}
+
+@media (max-width: 520px) {
+  .admin-stat-tile--server {
+    grid-column: span 1;
+  }
+}
+
+.admin-stat-stack {
+  width: 100%;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+.admin-stat-inline-label {
+  font-weight: 600;
+  opacity: 0.75;
+  margin-right: 4px;
+}
+
 .admin-stat-value {
   font-size: 22px;
   font-weight: 700;

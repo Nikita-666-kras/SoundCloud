@@ -39,6 +39,15 @@ interface AdminStats {
   trackComments: number;
   playlists: number;
   supportMessages: number;
+  onlineUsers: number;
+  loadAverage1m: number | null;
+  availableProcessors: number;
+  heapUsedPercent: number;
+  heapUsedMb: number;
+  heapMaxMb: number;
+  tracksUploadedToday: number;
+  tracksUploadedThisMonth: number;
+  tracksUploadedThisYear: number;
 }
 
 const auth = useAuthStore();
@@ -65,6 +74,11 @@ const nf = new Intl.NumberFormat('ru-RU');
 
 function formatStat(n: number) {
   return nf.format(n);
+}
+
+function formatLoad1m(v: number | null | undefined) {
+  if (v == null || Number.isNaN(v)) return '—';
+  return v.toFixed(2);
 }
 
 async function loadStats() {
@@ -192,7 +206,10 @@ onMounted(() => {
       <div class="card-header">
         <div>
           <div class="card-title">Статистика</div>
-          <div class="muted">Сводка по базе (только для администратора)</div>
+          <div class="muted">
+            Сводка по базе и JVM. Онлайн — авторизованные с запросом за ~5 мин (один сервер). Загрузки треков — по
+            <code>createdAt</code> с начала дня/месяца/года в UTC.
+          </div>
         </div>
         <button type="button" class="secondary-button" :disabled="statsLoading" @click="loadStats">
           {{ statsLoading ? 'Обновляем…' : 'Обновить' }}
@@ -201,6 +218,37 @@ onMounted(() => {
       <p v-if="statsError" class="muted admin-support-banner-error">{{ statsError }}</p>
       <div v-if="statsLoading && !stats" class="muted">Загружаем статистику...</div>
       <div v-else-if="stats" class="admin-stats-grid">
+        <div class="admin-stat-tile">
+          <div class="admin-stat-value">{{ formatStat(stats.onlineUsers) }}</div>
+          <div class="admin-stat-label muted">Онлайн (авториз., ~5 мин)</div>
+        </div>
+        <div class="admin-stat-tile admin-stat-tile--server">
+          <div class="admin-stat-stack">
+            <div>
+              <span class="admin-stat-inline-label">Load 1m:</span>
+              {{ formatLoad1m(stats.loadAverage1m) }}
+              <span class="muted"> · {{ stats.availableProcessors }} CPU</span>
+            </div>
+            <div>
+              <span class="admin-stat-inline-label">Heap:</span>
+              {{ stats.heapUsedPercent }}%
+              <span class="muted"> ({{ formatStat(stats.heapUsedMb) }} / {{ formatStat(stats.heapMaxMb) }} МиБ)</span>
+            </div>
+          </div>
+          <div class="admin-stat-label muted">Нагрузка ОС / память JVM</div>
+        </div>
+        <div class="admin-stat-tile">
+          <div class="admin-stat-value">{{ formatStat(stats.tracksUploadedToday) }}</div>
+          <div class="admin-stat-label muted">Треки за сутки (UTC)</div>
+        </div>
+        <div class="admin-stat-tile">
+          <div class="admin-stat-value">{{ formatStat(stats.tracksUploadedThisMonth) }}</div>
+          <div class="admin-stat-label muted">Треки за месяц (UTC)</div>
+        </div>
+        <div class="admin-stat-tile">
+          <div class="admin-stat-value">{{ formatStat(stats.tracksUploadedThisYear) }}</div>
+          <div class="admin-stat-label muted">Треки за год (UTC)</div>
+        </div>
         <div class="admin-stat-tile">
           <div class="admin-stat-value">{{ formatStat(stats.users) }}</div>
           <div class="admin-stat-label muted">Пользователи</div>
