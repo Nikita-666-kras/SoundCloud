@@ -21,8 +21,8 @@ services:
     ports:
       - '127.0.0.1:8080:8080'
     environment:
-      # Не съедать всю RAM хоста (OOM killer убивал java рядом с Postgres/MinIO). Под 1–2 GiB VPS снизьте до 25.
-      JAVA_TOOL_OPTIONS: '-XX:MaxRAMPercentage=40.0 -XX:+UseContainerSupport'
+      # Под 2 GiB VPS: 25% heap — больше воздуха для Postgres/MinIO/ОС (раньше 40% давало OOM).
+      JAVA_TOOL_OPTIONS: '-XX:MaxRAMPercentage=25.0 -XX:+UseContainerSupport'
       SPRING_PROFILES_ACTIVE: prod
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/soundcloud
       SPRING_DATASOURCE_USERNAME: soundcloud
