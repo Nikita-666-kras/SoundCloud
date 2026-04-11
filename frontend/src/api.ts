@@ -1,12 +1,15 @@
-import axios, { type AxiosError } from 'axios';
+import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import { useAuthStore } from './stores/auth';
 import { getApiBaseUrl } from './config';
 
 const BASE_URL = getApiBaseUrl();
 
+type RetryConfig = InternalAxiosRequestConfig & { _retry?: boolean; _netRetry?: number };
+
 export const api = axios.create({
   baseURL: BASE_URL,
   withCredentials: true,
+  timeout: 60000,
   headers: { 'Content-Type': 'application/json' }
 });
 
@@ -33,7 +36,29 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
-    const originalRequest = error.config as typeof error.config & { _retry?: boolean };
+    const originalRequest = error.config as RetryConfig | undefined;
+    if (!originalRequest) {
+      return Promise.reject(error);
+    }
+
+    const method = (originalRequest.method || 'get').toLowerCase();
+    const url = String(originalRequest.url || '');
+    const skipNetRetry = url.includes('/auth/refresh') || url.includes('/auth/login');
+    const status = error.response?.status;
+    const transient =
+      !error.response ||
+      status === 502 ||
+      status === 503 ||
+      status === 504 ||
+      error.code === 'ECONNABORTED' ||
+      error.message === 'Network Error';
+
+    if (method === 'get' && !skipNetRetry && transient && (originalRequest._netRetry ?? 0) < 2) {
+      originalRequest._netRetry = (originalRequest._netRetry ?? 0) + 1;
+      await new Promise((r) => setTimeout(r, 450 * originalRequest._netRetry));
+      return api.request(originalRequest);
+    }
+
     if (error.response?.status !== 401 || originalRequest._retry) {
       return Promise.reject(error);
     }
@@ -62,7 +87,7 @@ api.interceptors.response.use(
       const res = await axios.post<{ accessToken: string; refreshToken: string; expiresIn: number; user: unknown }>(
         `${BASE_URL}/auth/refresh`,
         { refreshToken: auth.refreshToken },
-        { withCredentials: true }
+        { withCredentials: true, timeout: 30000 }
       );
       const { accessToken, refreshToken, user } = res.data;
       auth.setTokens(accessToken, refreshToken);
