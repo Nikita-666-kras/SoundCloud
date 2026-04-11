@@ -2137,6 +2137,26 @@ body.dark-theme .my-releases-promo-row {
   background: rgba(248, 250, 252, 0.75);
 }
 
+/* Промо и форма редактирования — на всю ширину карточки, а не во второй колонке рядом с обложкой */
+.my-releases-track-row > .my-releases-promo-inline,
+.my-releases-track-row > .my-releases-edit-form {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+/* Мобилка: поля редактирования строго по одному на строку */
+@media (max-width: 768px) {
+  .my-releases-edit-form .my-releases-edit-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .my-releases-edit-form .my-releases-edit-grid .input-group {
+    grid-column: auto;
+    min-width: 0;
+  }
+}
+
 .my-releases-album-card-wrap {
   display: flex;
   flex-direction: column;
@@ -2749,6 +2769,10 @@ body.dark-theme .friends-search-icon {
 
 .form-grid .input-group {
   margin-bottom: 0;
+}
+
+.form-grid-full-row {
+  grid-column: 1 / -1;
 }
 
 @media (max-width: 700px) {

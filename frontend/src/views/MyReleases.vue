@@ -489,17 +489,17 @@ function goToAlbumEdit(albumName: string) {
               </div>
 
               <div v-if="editingId === track.id" class="comments-block my-releases-edit-form">
-                <div class="form-grid">
+                <div class="form-grid my-releases-edit-grid">
                   <div class="input-group">
                     <input v-model="editTitle" class="input-control" type="text" placeholder="Название трека" />
                   </div>
                   <div class="input-group">
                     <input v-model="editGenre" class="input-control" type="text" placeholder="Жанр" />
                   </div>
-                  <div class="input-group" style="grid-column: span 2">
+                  <div class="input-group form-grid-full-row">
                     <input v-model="editAlbum" class="input-control" type="text" placeholder="Альбом" />
                   </div>
-                  <div class="input-group" style="grid-column: span 2">
+                  <div class="input-group form-grid-full-row">
                     <textarea
                       v-model="editDescription"
                       class="input-control-textarea"
