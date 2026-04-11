@@ -22,9 +22,7 @@ body.dark-theme {
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
-  background:
-    url('/background.png') center center / cover no-repeat fixed,
-    #ffffff;
+  background: #ffffff;
   color: var(--text-primary);
   overflow-x: hidden;
 }
@@ -36,9 +34,7 @@ img {
 }
 
 body.dark-theme {
-  background:
-    url('/background.png') center center / cover no-repeat fixed,
-    #020617;
+  background: #020617;
   color: var(--text-primary);
 }
 
