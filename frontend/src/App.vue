@@ -228,13 +228,26 @@ function applyThemeFromStorage() {
   }
 }
 
+/** Отложить работу после первого кадра / в простое — меньше конкурирует с парсингом бандла на мобилках */
+function runWhenIdle(fn: () => void) {
+  const ric = (globalThis as unknown as { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => void })
+    .requestIdleCallback;
+  if (typeof ric === 'function') {
+    ric(() => fn(), { timeout: 2200 });
+  } else {
+    setTimeout(fn, 1);
+  }
+}
+
 onMounted(() => {
   auth.hydrateFromStorage();
-  if (auth.user) {
-    albumLikes.loadLiked();
-  }
   applyThemeFromStorage();
-  notifications.load();
+  runWhenIdle(() => {
+    void notifications.load();
+    if (auth.user) {
+      void albumLikes.loadLiked();
+    }
+  });
   if (audioElement.value) {
     player.setAudioElement(audioElement.value);
   }
@@ -321,8 +334,11 @@ watch(playerExpanded, open => {
 watch(
   () => auth.user?.id,
   userId => {
-    if (userId) void trackFavorites.fetchForUser(userId);
-    else trackFavorites.clear();
+    if (!userId) {
+      trackFavorites.clear();
+      return;
+    }
+    runWhenIdle(() => void trackFavorites.fetchForUser(userId));
   },
   { immediate: true }
 );
