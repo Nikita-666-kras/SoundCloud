@@ -2986,6 +2986,11 @@ body:not(.dark-theme) .player-bar-volume-flyout {
   justify-self: center;
 }
 
+/* Текстовые ‹‹ / ›› — без лишней высоты строки, иначе визуально «плывут» относительно круглой play */
+.player-bar-center > .player-bar-btn:not(.player-bar-btn-play) {
+  line-height: 0;
+}
+
 .player-bar-btn {
   width: 32px;
   height: 32px;
@@ -3055,6 +3060,11 @@ body:not(.dark-theme) .player-bar-volume-flyout {
 
 /* Десктоп: шире слайдер громкости */
 @media (min-width: 769px) {
+  /* Симметричные боковые колонки — кнопки play/prev/next по центру полосы (не max-content справа). */
+  .player-bar-row {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  }
+
   .player-bar-right {
     gap: 12px;
   }
