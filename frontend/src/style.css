@@ -137,22 +137,11 @@ body.dark-theme .app-header {
   text-transform: uppercase;
 }
 
-.logo-mark {
+.logo-image {
   width: 22px;
   height: 22px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #0ea5e9, #22c1c3);
-  box-shadow: 0 4px 10px rgba(14, 165, 233, 0.45);
-}
-
-.logo-wave {
-  width: 12px;
-  height: 12px;
-  border-radius: 999px;
-  border: 2px solid #0f172a;
-  border-top-color: transparent;
-  border-left-color: transparent;
-  transform: rotate(40deg);
+  border-radius: 6px;
+  object-fit: cover;
 }
 
 .pill {

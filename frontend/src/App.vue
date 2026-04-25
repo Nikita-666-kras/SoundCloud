@@ -349,9 +349,7 @@ watch(
     <header class="app-header">
       <div class="header-left">
         <div class="logo" @click="router.push('/')">
-          <div class="logo-mark">
-            <div class="logo-wave" />
-          </div>
+          <img class="logo-image" src="/logo-slapsHouse.png" alt="slapshous logo" />
           <span>slapshous</span>
         </div>
         <button
