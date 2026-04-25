@@ -319,6 +319,15 @@ function navTo(path: string) {
   router.push(path);
 }
 
+function goToUpload() {
+  closeMobileMenu();
+  if (!auth.user) {
+    router.push('/login');
+    return;
+  }
+  router.push('/upload');
+}
+
 watch(
   () => route.path,
   () => {
@@ -614,7 +623,7 @@ watch(
         <button v-if="!auth.user" class="secondary-button" @click="router.push('/register')">
           Регистрация
         </button>
-        <button class="primary-button upload-button header-desktop-only" :disabled="isUploadDisabled" @click="router.push('/upload')">
+        <button class="primary-button upload-button header-desktop-only" :disabled="isUploadDisabled" @click="goToUpload">
           Выложить трек
         </button>
       </div>
@@ -750,7 +759,7 @@ watch(
               <button type="button" class="primary-button burger-upload-btn full-width" @click="navTo('/login')">Вход</button>
               <button type="button" class="secondary-button burger-upload-btn full-width" @click="navTo('/register')">Регистрация</button>
             </div>
-            <button class="primary-button burger-upload-btn full-width" :disabled="isUploadDisabled" @click="navTo('/upload')">
+            <button class="primary-button burger-upload-btn full-width" :disabled="isUploadDisabled" @click="goToUpload">
               Выложить трек
             </button>
           </div>
