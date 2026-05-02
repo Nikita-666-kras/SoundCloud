@@ -52,23 +52,11 @@ services:
       args:
         VITE_APP_ORIGIN: ''
     container_name: soundcloud-frontend
+    ports:
+      - '127.0.0.1:5173:80'
     depends_on:
       - backend
     restart: unless-stopped
-    networks:
-      - default
-      - web
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.slapshous-http.rule=Host(`slapshous.online`) || Host(`www.slapshous.online`)
-      - traefik.http.routers.slapshous-http.entrypoints=web
-      - traefik.http.routers.slapshous-http.middlewares=slapshous-redirect-https
-      - traefik.http.routers.slapshous.rule=Host(`slapshous.online`) || Host(`www.slapshous.online`)
-      - traefik.http.routers.slapshous.entrypoints=websecure
-      - traefik.http.routers.slapshous.tls=true
-      - traefik.http.routers.slapshous.tls.certresolver=le
-      - traefik.http.services.slapshous.loadbalancer.server.port=80
-      - traefik.http.middlewares.slapshous-redirect-https.redirectscheme.scheme=https
 
   redis:
     image: redis:7-alpine
@@ -94,7 +82,3 @@ services:
 volumes:
   postgres-data:
   minio-data:
-
-networks:
-  web:
-    external: true
